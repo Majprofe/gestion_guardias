@@ -1,12 +1,20 @@
 package com.FranGarcia.NuevaVersionGuardias.controllers;
 
 import com.FranGarcia.NuevaVersionGuardias.dto.AusenciaConGuardiasDTO;
+import com.FranGarcia.NuevaVersionGuardias.dto.CrearAusenciaDTO;
 import com.FranGarcia.NuevaVersionGuardias.models.Ausencia;
 import com.FranGarcia.NuevaVersionGuardias.services.AusenciaService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,7 +27,6 @@ import java.util.*;
  */
 @RestController
 @RequestMapping("/api/ausencias")
-@CrossOrigin(origins = "http://127.0.0.1:5500")
 @Tag(name = "Ausencias", description = "Operaciones relacionadas con ausencias y coberturas")
 public class AusenciaController {
 
@@ -28,14 +35,24 @@ public class AusenciaController {
 
     /**
      * Registra una nueva ausencia y asigna una cobertura si hay profesores disponibles.
+     * IMPORTANTE: El ID se genera automáticamente, NO debe ser proporcionado.
      *
-     * @param dto DTO con la información de la ausencia y posibles profesores de guardia.
-     * @return La entidad {@link Ausencia} registrada.
+     * @param dto DTO con la información de la ausencia (SIN ID).
+     * @return La entidad {@link AusenciaConGuardiasDTO} registrada (CON ID generado).
      */
     @PostMapping
-    @Operation(summary = "Registrar una ausencia y asignar cobertura si hay profesores disponibles")
-    public Ausencia registrarAusencia(@RequestBody AusenciaConGuardiasDTO dto) {
-        return ausenciaService.guardarYAsignarCobertura(dto);
+    @Operation(summary = "Registrar una nueva ausencia",
+               description = "Registra una nueva ausencia en el sistema. El ID se genera automáticamente. " +
+                           "Opcionalmente asigna un profesor de guardia si se proporciona.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Ausencia registrada exitosamente con ID generado"),
+        @ApiResponse(responseCode = "400", description = "Datos de entrada inválidos"),
+        @ApiResponse(responseCode = "409", description = "Ya existe una ausencia para este profesor en esta fecha y hora")
+    })
+    public ResponseEntity<AusenciaConGuardiasDTO> registrarAusencia(
+            @Valid @RequestBody CrearAusenciaDTO dto) {
+        AusenciaConGuardiasDTO ausenciaCreada = ausenciaService.guardarYAsignarCobertura(dto);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ausenciaCreada);
     }
 
     /**
@@ -46,11 +63,20 @@ public class AusenciaController {
      * @return Lista de ausencias para la fecha y hora proporcionadas, si existen.
      */
     @GetMapping("/por-fecha-hora")
-    @Operation(summary = "Listar ausencias por fecha y hora")
-    public Optional<List<Ausencia>> listarPorFechaHora(
+    @Operation(summary = "Listar ausencias por fecha y hora",
+               description = "Obtiene todas las ausencias registradas para una fecha y hora específicas")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Ausencias encontradas"),
+        @ApiResponse(responseCode = "404", description = "No se encontraron ausencias para la fecha y hora especificadas")
+    })
+    public ResponseEntity<List<Ausencia>> listarPorFechaHora(
+            @Parameter(description = "Fecha de la ausencia en formato YYYY-MM-DD", example = "2025-08-21")
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
-            @RequestParam Integer hora) {
-        return ausenciaService.listarPorFechaHora(fecha, hora);
+            @Parameter(description = "Hora de la ausencia (1-8)", example = "3")
+            @RequestParam @Min(1) @Max(8) Integer hora) {
+        Optional<List<Ausencia>> ausencias = ausenciaService.listarPorFechaHora(fecha, hora);
+        return ausencias.map(ResponseEntity::ok)
+                       .orElse(ResponseEntity.notFound().build());
     }
 
     /**
@@ -103,126 +129,16 @@ public class AusenciaController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> eliminarAusencia(@PathVariable Long id) {
+    @Operation(summary = "Eliminar una ausencia",
+               description = "Elimina una ausencia específica del sistema por su ID")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "204", description = "Ausencia eliminada exitosamente"),
+        @ApiResponse(responseCode = "404", description = "Ausencia no encontrada")
+    })
+    public ResponseEntity<Void> eliminarAusencia(
+            @Parameter(description = "ID único de la ausencia a eliminar", example = "1")
+            @PathVariable Long id) {
         ausenciaService.eliminarPorId(id);
         return ResponseEntity.noContent().build();
     }
-
-
 }
-
-
-
-
-    /* CODIGO ANTIGUO
-
-    @Autowired
-    private AusenciaService ausenciaService;
-
-    @Autowired
-    private AusenciaRepository ausenciaRepository;
-
-    @PostMapping("/registrar")
-    public ResponseEntity<?> registrarAusencias(@RequestBody List<AusenciaDTO> ausenciasDTO) {
-        try {
-            List<Ausencia> ausencias = new ArrayList<>();
-            for (AusenciaDTO ausenciaDTO : ausenciasDTO) {
-                Ausencia ausencia = ausenciaService.registrarAusencia(ausenciaDTO);
-                ausencias.add(ausencia);
-            }
-            return ResponseEntity.status(HttpStatus.CREATED).body(ausencias);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error al registrar las ausencias: " + e.getMessage());
-        }
-    }
-
-    @DeleteMapping("/eliminar")
-    public ResponseEntity<String> eliminarFalta(
-            @RequestParam("fecha") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
-            @RequestParam("hora") Integer hora,
-            @RequestParam("emailProfesor") String emailProfesor) {
-        try {
-            boolean eliminado = ausenciaService.eliminarFalta(fecha, hora, emailProfesor);
-
-            if (eliminado) {
-                return ResponseEntity.ok("Falta eliminada correctamente.");
-            } else {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Falta no encontrada.");
-            }
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error al eliminar la falta.");
-        }
-    }
-
-    @GetMapping("/listar/{fecha}")
-    public ResponseEntity<Map<String, List<AusenciaDTO>>> listarAusenciasPorFecha(@PathVariable("fecha") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha) {
-        try {
-            Map<String, List<AusenciaDTO>> ausenciasPorHora = ausenciaService.listarAusenciasPorFechaAgrupadasPorHora(fecha);
-            if (ausenciasPorHora.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.NO_CONTENT).body(null);     //Si esta vacio, querra decir que no hay ausencias ese dia, por lo que devolvera vacio
-            }
-            return ResponseEntity.ok(ausenciasPorHora);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
-        }
-    }
-
-    @GetMapping("/historico")
-    public ResponseEntity<Map<LocalDate, Map<String, List<AusenciaDTO>>>> obtenerHistoricoFaltas() {
-        try {
-            Map<LocalDate, Map<String, List<AusenciaDTO>>> historicoFaltas = ausenciaService.historicoFaltas();
-
-            // Si el histórico está vacío, devolvemos un 204
-            if (historicoFaltas.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.NO_CONTENT).body(null);
-            }
-
-            // Devolvemos el histórico con un 200
-            return ResponseEntity.ok(historicoFaltas);
-        } catch (Exception e) {
-            // En caso de error, devolvemos un 400
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
-        }
-    }
-
-    @GetMapping("/historico/{email}")
-    public ResponseEntity<Map<LocalDate, Map<String, List<AusenciaDTO>>>> obtenerHistoricoFaltasPorProfesor(@PathVariable String email) {
-        try {
-            Map<LocalDate, Map<String, List<AusenciaDTO>>> historicoFaltas = ausenciaService.historicoFaltasPorProfesor(email);
-            if (historicoFaltas.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.NO_CONTENT).body(null);
-            }
-            return ResponseEntity.ok(historicoFaltas);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
-        }
-    }
-
-    @GetMapping("/misAusencias/{email}")
-    public ResponseEntity<List<AusenciaDTO>> obtenerMisAusencias(@PathVariable String email) {
-        List<AusenciaDTO> ausencias = ausenciaService.obtenerAusenciasPorProfesor(email);
-        return ResponseEntity.ok(ausencias);
-    }
-
-    @DeleteMapping("/eliminar/{id}")
-    public ResponseEntity<?> eliminarAusencia(@PathVariable Long id) {
-        try {
-            Optional<Ausencia> ausencia = ausenciaRepository.findById(id);
-            if (ausencia.isPresent()) {
-                ausenciaRepository.delete(ausencia.get());
-                return ResponseEntity.ok("Ausencia eliminada correctamente.");
-            } else {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Ausencia no encontrada.");
-            }
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error eliminando ausencia: " + e.getMessage());
-        }
-    }
-
-
-}
-
-
-
-     */

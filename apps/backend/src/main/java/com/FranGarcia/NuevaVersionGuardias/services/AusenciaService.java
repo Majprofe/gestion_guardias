@@ -1,11 +1,15 @@
 package com.FranGarcia.NuevaVersionGuardias.services;
 
 import com.FranGarcia.NuevaVersionGuardias.dto.AusenciaConGuardiasDTO;
+import com.FranGarcia.NuevaVersionGuardias.dto.CrearAusenciaDTO;
+import com.FranGarcia.NuevaVersionGuardias.exception.BusinessException;
+import com.FranGarcia.NuevaVersionGuardias.exception.ResourceNotFoundException;
 import com.FranGarcia.NuevaVersionGuardias.models.*;
 import com.FranGarcia.NuevaVersionGuardias.repositories.AusenciaRepository;
 import com.FranGarcia.NuevaVersionGuardias.repositories.CoberturaRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,46 +31,82 @@ public class AusenciaService {
 
     /**
      * Guarda una nueva ausencia y asigna una cobertura con el profesor en guardia proporcionado.
+     * El ID se genera automáticamente por la base de datos.
      *
-     * @param dto Objeto que contiene los detalles de la ausencia y el profesor en guardia.
-     * @return La ausencia guardada.
-     * @throws RuntimeException Si la ausencia ya existe para el profesor en la misma fecha y hora.
+     * @param crearDto Objeto que contiene los detalles de la ausencia SIN ID.
+     * @return AusenciaConGuardiasDTO con el ID generado.
+     * @throws BusinessException Si la ausencia ya existe para el profesor en la misma fecha y hora.
      */
-    public Ausencia guardarYAsignarCobertura(AusenciaConGuardiasDTO dto) {
-        logger.debug("Intentando guardar ausencia: {}", dto);
+    public AusenciaConGuardiasDTO guardarYAsignarCobertura(CrearAusenciaDTO crearDto) {
+        logger.debug("Intentando guardar ausencia: {}", crearDto);
 
         if (ausenciaRepository.existsByProfesorAusenteEmailAndFechaAndHora(
-                dto.getProfesorAusenteEmail(), dto.getFecha(), dto.getHora())) {
+                crearDto.getProfesorAusenteEmail(), crearDto.getFecha(), crearDto.getHora())) {
             logger.warn("La ausencia ya existe para el profesor {} en fecha {} y hora {}",
-                    dto.getProfesorAusenteEmail(), dto.getFecha(), dto.getHora());
-            throw new RuntimeException("La ausencia ya existe");
+                    crearDto.getProfesorAusenteEmail(), crearDto.getFecha(), crearDto.getHora());
+            throw new BusinessException(
+                "Ya existe una ausencia registrada para el profesor " + crearDto.getProfesorAusenteEmail() + 
+                " en la fecha " + crearDto.getFecha() + " y hora " + crearDto.getHora(),
+                HttpStatus.CONFLICT
+            );
         }
 
-        // Crear ausencia
+        // Crear ausencia (SIN asignar ID - se genera automáticamente)
         Ausencia ausencia = new Ausencia();
-        ausencia.setProfesorAusenteEmail(dto.getProfesorAusenteEmail());
-        ausencia.setFecha(dto.getFecha());
-        ausencia.setHora(dto.getHora());
-        ausencia.setTarea(dto.getTarea());
-        ausencia.setGrupo(dto.getGrupo());
-        ausencia.setAula(dto.getAula());
+        ausencia.setProfesorAusenteEmail(crearDto.getProfesorAusenteEmail());
+        ausencia.setFecha(crearDto.getFecha());
+        ausencia.setHora(crearDto.getHora());
+        ausencia.setTarea(crearDto.getTarea());
+        ausencia.setGrupo(crearDto.getGrupo());
+        ausencia.setAula(crearDto.getAula());
 
+        // Guardar en BD - aquí se genera el ID automáticamente
         ausencia = ausenciaRepository.save(ausencia);
-        logger.info("Ausencia guardada con ID {}", ausencia.getId());
+        logger.info("Ausencia guardada con ID generado automáticamente: {}", ausencia.getId());
 
-        // Crear cobertura directamente con el profesor proporcionado
-        Cobertura cobertura = new Cobertura();
-        cobertura.setAusencia(ausencia);
-        cobertura.setProfesorCubreEmail(dto.getProfesorEnGuardiaEmail());
-        cobertura.setGrupo(dto.getGrupo());
-        cobertura.setAula(dto.getAula());
+        // Crear cobertura si se proporciona profesor de guardia
+        if (crearDto.getProfesorEnGuardiaEmail() != null && !crearDto.getProfesorEnGuardiaEmail().isBlank()) {
+            Cobertura cobertura = new Cobertura();
+            cobertura.setAusencia(ausencia);
+            cobertura.setProfesorCubreEmail(crearDto.getProfesorEnGuardiaEmail());
+            cobertura.setGrupo(crearDto.getGrupo());
+            cobertura.setAula(crearDto.getAula());
 
-        coberturaRepository.save(cobertura);
-        logger.info("Cobertura creada para la ausencia con ID {} por el profesor {}", ausencia.getId(), dto.getProfesorEnGuardiaEmail());
+            coberturaRepository.save(cobertura);
+            logger.info("Cobertura creada para la ausencia con ID {} por el profesor {}", 
+                       ausencia.getId(), crearDto.getProfesorEnGuardiaEmail());
+        } else {
+            logger.info("No se asignó profesor de guardia para la ausencia con ID {}", ausencia.getId());
+        }
 
-        return ausencia;
+        // Convertir a DTO de respuesta (con ID)
+        return convertirAusenciaADTO(ausencia);
     }
 
+    /**
+     * Convierte una entidad Ausencia a un DTO de respuesta AusenciaConGuardiasDTO.
+     * Este método incluye la información de cobertura si existe.
+     *
+     * @param ausencia La entidad Ausencia a convertir.
+     * @return El DTO de respuesta con toda la información de la ausencia y cobertura.
+     */
+    private AusenciaConGuardiasDTO convertirAusenciaADTO(Ausencia ausencia) {
+        AusenciaConGuardiasDTO dto = new AusenciaConGuardiasDTO();
+        dto.setId(ausencia.getId());
+        dto.setFecha(ausencia.getFecha());
+        dto.setHora(ausencia.getHora());
+        dto.setProfesorAusenteEmail(ausencia.getProfesorAusenteEmail());
+        dto.setTarea(ausencia.getTarea());
+        dto.setGrupo(ausencia.getGrupo());
+        dto.setAula(ausencia.getAula());
+        
+        // Incluir información de cobertura si existe
+        if (ausencia.getCobertura() != null) {
+            dto.setProfesorEnGuardiaEmail(ausencia.getCobertura().getProfesorCubreEmail());
+        }
+        
+        return dto;
+    }
 
     /**
      * Lista las ausencias para una fecha y hora específicas.
@@ -209,7 +249,6 @@ public class AusenciaService {
      * @return Una lista de objetos {@link AusenciaConGuardiasDTO} que contienen los detalles de las ausencias del profesor.
      */
     public List<AusenciaConGuardiasDTO> obtenerAusenciasPorProfesor(String email) {
-        System.out.println("🟡 Buscando ausencias para: " + email);
         logger.debug("Obteniendo ausencias para el profesor {}", email);
         List<Ausencia> ausencias = ausenciaRepository.findAllByProfesorAusenteEmail(email);
 
@@ -235,7 +274,11 @@ public class AusenciaService {
     }
 
     public void eliminarPorId(Long id) {
+        if (!ausenciaRepository.existsById(id)) {
+            throw new ResourceNotFoundException("Ausencia", "id", id);
+        }
         ausenciaRepository.deleteById(id);
+        logger.info("Ausencia con ID {} eliminada correctamente", id);
     }
 
 }

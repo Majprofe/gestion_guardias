@@ -5,6 +5,7 @@ import es.iesjandula.timetable.dto.HorarioDiaResponse;
 import es.iesjandula.timetable.dto.HorarioProfesorResponse;
 import es.iesjandula.timetable.dto.ProfesorGuardiaDto;
 import es.iesjandula.timetable.dto.ProfesorGuardiaResponse;
+import es.iesjandula.timetable.exception.ProfesorNotFoundException;
 import es.iesjandula.timetable.model.Actividad;
 import es.iesjandula.timetable.model.Profesor;
 import es.iesjandula.timetable.model.TipoActividad;
@@ -12,12 +13,16 @@ import es.iesjandula.timetable.repository.ActividadRepository;
 import es.iesjandula.timetable.repository.ProfesorRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 public class HorarioService {
+
+    private static final Logger logger = LoggerFactory.getLogger(HorarioService.class);
 
     @Autowired
     private ActividadRepository actividadRepository;
@@ -30,10 +35,12 @@ public class HorarioService {
     };
 
     public HorarioProfesorResponse getHorarioProfesor(Long profesorId) {
+        logger.debug("Obteniendo horario para profesor ID: {}", profesorId);
         Profesor profesor = profesorRepository.findById(profesorId)
-                .orElseThrow(() -> new RuntimeException("Profesor no encontrado"));
+                .orElseThrow(() -> new ProfesorNotFoundException(profesorId));
 
         List<Actividad> actividades = actividadRepository.findByProfesorId(profesorId);
+        logger.info("Encontradas {} actividades para profesor ID {}", actividades.size(), profesorId);
 
         Map<String, List<ActividadDto>> horario = buildHorarioPorDias(actividades);
 
@@ -41,10 +48,12 @@ public class HorarioService {
     }
 
     public HorarioProfesorResponse getHorarioProfesorPorEmail(String email) {
+        logger.debug("Obteniendo horario para profesor email: {}", email);
         Profesor profesor = profesorRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Profesor no encontrado"));
+                .orElseThrow(() -> new ProfesorNotFoundException("email", email));
 
         List<Actividad> actividades = actividadRepository.findByProfesorId(profesor.getId());
+        logger.info("Encontradas {} actividades para profesor email {}", actividades.size(), email);
 
         Map<String, List<ActividadDto>> horario = buildHorarioPorDias(actividades);
 
@@ -52,10 +61,14 @@ public class HorarioService {
     }
 
     public HorarioDiaResponse getHorarioProfesorEnDia(Long profesorId, int diaSemana) {
+        logger.debug("Obteniendo horario para profesor ID: {} en día: {}", profesorId, diaSemana);
         Profesor profesor = profesorRepository.findById(profesorId)
-                .orElseThrow(() -> new RuntimeException("Profesor no encontrado"));
+                .orElseThrow(() -> new ProfesorNotFoundException(profesorId));
 
-        List<Actividad> actividades = actividadRepository.findByProfesorId(profesorId);
+        // ✅ OPTIMIZACIÓN: Query específica para día
+        List<Actividad> actividades = actividadRepository.findByProfesorIdAndTramoDiaSemana(profesorId, diaSemana);
+        logger.info("Encontradas {} actividades para profesor ID {} en día {}", 
+                   actividades.size(), profesorId, diaSemana);
 
         List<ActividadDto> actividadesDia = buildActividadesPorDia(actividades, diaSemana);
 
@@ -63,10 +76,14 @@ public class HorarioService {
     }
 
     public HorarioDiaResponse getHorarioProfesorEnDiaPorEmail(String email, int diaSemana) {
+        logger.debug("Obteniendo horario para profesor email: {} en día: {}", email, diaSemana);
         Profesor profesor = profesorRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Profesor no encontrado"));
+                .orElseThrow(() -> new ProfesorNotFoundException("email", email));
 
-        List<Actividad> actividades = actividadRepository.findByProfesorId(profesor.getId());
+        // ✅ OPTIMIZACIÓN: Query específica para día
+        List<Actividad> actividades = actividadRepository.findByProfesorIdAndTramoDiaSemana(profesor.getId(), diaSemana);
+        logger.info("Encontradas {} actividades para profesor email {} en día {}", 
+                   actividades.size(), email, diaSemana);
 
         List<ActividadDto> actividadesDia = buildActividadesPorDia(actividades, diaSemana);
 
@@ -74,10 +91,13 @@ public class HorarioService {
     }
 
     public HorarioProfesorResponse getHorarioProfesorSinOtras(Long profesorId) {
+        logger.debug("Obteniendo horario sin actividades OTRA para profesor ID: {}", profesorId);
         Profesor profesor = profesorRepository.findById(profesorId)
-                .orElseThrow(() -> new RuntimeException("Profesor no encontrado"));
+                .orElseThrow(() -> new ProfesorNotFoundException(profesorId));
 
-        List<Actividad> actividades = actividadRepository.findByProfesorId(profesorId);
+        // ✅ OPTIMIZACIÓN: Query específica excluyendo tipo OTRA
+        List<Actividad> actividades = actividadRepository.findByProfesorIdExcludingTipo(profesorId, TipoActividad.OTRA);
+        logger.info("Encontradas {} actividades (sin OTRA) para profesor ID {}", actividades.size(), profesorId);
 
         Map<String, List<ActividadDto>> horario = buildHorarioPorDias(actividades, true);
 
@@ -85,10 +105,13 @@ public class HorarioService {
     }
 
     public HorarioProfesorResponse getHorarioProfesorSinOtrasPorEmail(String email) {
+        logger.debug("Obteniendo horario sin actividades OTRA para profesor email: {}", email);
         Profesor profesor = profesorRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Profesor no encontrado"));
+                .orElseThrow(() -> new ProfesorNotFoundException("email", email));
 
-        List<Actividad> actividades = actividadRepository.findByProfesorId(profesor.getId());
+        // ✅ OPTIMIZACIÓN: Query específica excluyendo tipo OTRA
+        List<Actividad> actividades = actividadRepository.findByProfesorIdExcludingTipo(profesor.getId(), TipoActividad.OTRA);
+        logger.info("Encontradas {} actividades (sin OTRA) para profesor email {}", actividades.size(), email);
 
         Map<String, List<ActividadDto>> horario = buildHorarioPorDias(actividades, true);
 

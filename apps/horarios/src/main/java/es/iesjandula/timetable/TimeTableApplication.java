@@ -1,10 +1,22 @@
 package es.iesjandula.timetable;
 
 import io.github.cdimascio.dotenv.Dotenv;
+import io.swagger.v3.oas.annotations.OpenAPIDefinition;
+import io.swagger.v3.oas.annotations.info.Info;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-@SpringBootApplication
+@SpringBootApplication(exclude = {
+	org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class,
+	org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration.class
+})
+@OpenAPIDefinition(
+    info = @Info(
+        title = "Horarios API",
+        version = "1.0.0",
+        description = "API para gestión de horarios y profesores del IES Jándula"
+    )
+)
 public class TimeTableApplication {
 
     static {
