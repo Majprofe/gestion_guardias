@@ -3,6 +3,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import fs from 'fs'
+import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -10,12 +11,12 @@ export default defineConfig({
     vue(),
     vueDevTools(),
   ],
+  // Configurar Vite para leer variables de entorno desde el directorio raíz
+  envDir: path.resolve(__dirname, '../../'),
   server: {
-    https: {
-      key: fs.readFileSync('./key.pem'),
-      cert: fs.readFileSync('./cert.pem'),
-    },
-    port: 5500
+    port: 5500,
+    host: true,
+    open: false
   },
   resolve: {
     alias: {

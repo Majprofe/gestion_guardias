@@ -39,15 +39,23 @@ export const profesoresAPI = {
   async upsertProfesor(profesorData) {
     const { data, error } = await supabase
       .from('profesores')
-      .upsert([profesorData], { onConflict: 'email' })
+      .upsert([{
+        ...profesorData,
+        activo: true,
+        created_at: new Date().toISOString()
+      }], { 
+        onConflict: 'email',
+        ignoreDuplicates: false 
+      })
       .select()
+      .single()
 
     if (error) {
       console.error('Error guardando profesor:', error)
       throw error
     }
 
-    return data[0]
+    return data
   },
 
   // Obtener profesores con guardias (para asignación automática)

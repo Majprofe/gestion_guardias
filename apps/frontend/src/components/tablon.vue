@@ -42,15 +42,17 @@
 
 <script setup>
 import { ref, onMounted, computed } from "vue";
-import axios from "axios";
+import { getAusenciasByFecha, getCoberturaByAusencia, deleteAusencia } from '@/services/apiService'
 import { useToast } from "vue-toastification";
 import { watch } from "vue";
+import { useUserStore } from '@/stores/user';
 
 const toast = useToast();
+const userStore = useUserStore();
 
 const fecha = ref("");
 const faltasPorHora = ref({});
-const usuarioEmail = ref(null);
+const usuarioEmail = computed(() => userStore.getUserEmail);
 
 const fechaHoy = new Date().toISOString().split("T")[0];
 const esFechaActual = computed(() => fecha.value === fechaHoy);
@@ -80,7 +82,8 @@ const mostrarAcciones = (faltas) => {
 };
 
 onMounted(() => {
-    usuarioEmail.value = localStorage.getItem("userEmail");
+    // Inicializar fecha con hoy
+    fecha.value = fechaHoy;
 });
 
 watch(fecha, (nuevaFecha) => {
@@ -96,9 +99,7 @@ const cargarFaltas = async () => {
     }
 
     try {
-        const response = await axios.get("http://localhost:8081/api/ausencias/por-fecha", {
-            params: { fecha: fecha.value }
-        });
+        const response = await getAusenciasByFecha(fecha.value);
 
         const ausencias = response.data;
         const agrupadas = {};
@@ -113,9 +114,7 @@ const cargarFaltas = async () => {
                     let cobertura = false;
 
                     try {
-                        const coberturaResponse = await axios.get(
-                            `http://localhost:8081/api/coberturas/ausencia/${ausencia.id}`
-                        );
+                        const coberturaResponse = await getCoberturaByAusencia(ausencia.id);
 
                         if (coberturaResponse.data?.profesorCubreEmail) {
                             profesorCubreEmail = coberturaResponse.data.profesorCubreEmail.toLowerCase();
@@ -148,7 +147,7 @@ const cargarFaltas = async () => {
 
 const eliminarAusencia = async (id, hora, index) => {
     try {
-        await axios.delete(`http://localhost:8081/api/ausencias/${id}`);
+        await deleteAusencia(id);
         toast.success("Falta eliminada correctamente.");
         faltasPorHora.value[hora].splice(index, 1);
         if (faltasPorHora.value[hora].length === 0) {

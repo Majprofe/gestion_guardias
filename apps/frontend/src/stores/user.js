@@ -42,6 +42,12 @@ export const useUserStore = defineStore('user', () => {
     };
 
     const setUser = async (user) => {
+        // Verificar que el email pertenece al dominio permitido
+        if (!checkEmailDomain(user.email)) {
+            await logout();
+            throw new Error('Solo se permiten cuentas del instituto (@g.educaand.es)');
+        }
+
         usuario.value = user;
         isAuthenticated.value = true;
         
@@ -99,6 +105,39 @@ export const useUserStore = defineStore('user', () => {
         }
     };
 
+    const loginWithGoogle = async () => {
+        loading.value = true;
+        try {
+            const { data, error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: `${window.location.origin}/auth/callback`,
+                    queryParams: {
+                        access_type: 'offline',
+                        prompt: 'consent',
+                        hd: 'g.educaand.es' // Restringir al dominio del instituto
+                    }
+                }
+            });
+
+            if (error) throw error;
+
+            // El usuario será manejado por el callback de onAuthStateChange
+            return { success: true };
+        } catch (error) {
+            console.error('Error en login con Google:', error);
+            return { success: false, error: error.message };
+        } finally {
+            loading.value = false;
+        }
+    };
+
+    const checkEmailDomain = (email) => {
+        const allowedDomains = ['g.educaand.es']; 
+        const domain = email.split('@')[1];
+        return allowedDomains.includes(domain);
+    };
+
     const logout = async () => {
         try {
             const { error } = await supabase.auth.signOut();
@@ -132,7 +171,9 @@ export const useUserStore = defineStore('user', () => {
         setUser, 
         clearUser,
         login,
+        loginWithGoogle,
         logout,
-        resetUser 
+        resetUser,
+        checkEmailDomain
     };
 });

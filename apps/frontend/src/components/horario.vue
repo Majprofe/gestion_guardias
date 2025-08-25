@@ -32,7 +32,7 @@
 
 
 <script setup>
-import axios from 'axios'
+import { getHorarioByProfesorEmail } from '@/services/apiService'
 import { ref, watch } from 'vue'
 import { useUserStore } from "@/stores/user"
 import { useToast } from "vue-toastification"
@@ -49,7 +49,7 @@ watch(
     async (email) => {
         if (email && email !== "Sin usuario") {
             try {
-                const response = await axios.get(`http://localhost:8080/horario/profesor/email?email=${email}`)
+                const response = await getHorarioByProfesorEmail(email)
                 profesorNombre.value = response.data.profesorNombre
                 horario.value = response.data.horario
                 transformarHorario()

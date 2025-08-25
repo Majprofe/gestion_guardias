@@ -25,22 +25,11 @@
 
 
 <script setup>
-import { ref, onMounted } from "vue";
-import { supabase } from "@/supabaseClient"; 
+import { computed } from "vue";
+import { useUserStore } from '@/stores/user';
 
-const isAdmin = ref(false);
-
-onMounted(async () => {
-  const { data: { session } } = await supabase.auth.getSession();
-
-  if (session?.user) {
-    const userRole = localStorage.getItem("userRole");
-
-    if (userRole === 'admin') {
-      isAdmin.value = true;
-    }
-  }
-});
+const userStore = useUserStore();
+const isAdmin = computed(() => userStore.getIsAdmin);
 </script>
 
 <style scoped>

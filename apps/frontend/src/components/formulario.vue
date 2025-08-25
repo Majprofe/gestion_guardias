@@ -57,10 +57,19 @@
 
 <script setup>
 import { ref, onMounted } from "vue";
-import axios from "axios";
+import { 
+  getProfesorByEmailHorarios, 
+  getHorarioProfesorByDay, 
+  getGuardiaByDayAndHour,
+  createAusencia,
+  incrementarGuardiaNormal,
+  incrementarGuardiaProblematica
+} from '@/services/apiService'
 import { useToast } from "vue-toastification";
+import { useUserStore } from '@/stores/user';
 
 const toast = useToast();
+const userStore = useUserStore();
 const API_URL = import.meta.env.VITE_API_URL;
 
 const correo = ref("");
@@ -77,7 +86,7 @@ onMounted(() => {
     const month = String(hoy.getMonth() + 1).padStart(2, "0");
     const day = String(hoy.getDate()).padStart(2, "0");
     fechaMinima.value = `${year}-${month}-${day}`;
-    correo.value = localStorage.getItem("userEmail") || "";
+    correo.value = userStore.getUserEmail || "";
 });
 
 const seleccionarDiaCompleto = valor => {
@@ -97,12 +106,12 @@ const cargarHorasDelDia = async () => {
     if (!fecha.value || diaCompleto.value === "") return;
 
     try {
-        const profesorResponse = await axios.get(`http://localhost:8080/profesores/email/${correo.value}`);
+        const profesorResponse = await getProfesorByEmailHorarios(correo.value);
         const id = profesorResponse.data.id;
 
         const diaSemana = dia === 0 ? 7 : dia;
 
-        const horarioResponse = await axios.get(`http://localhost:8080/horario/profesor/${id}/dia/${diaSemana}`);
+        const horarioResponse = await getHorarioProfesorByDay(id, diaSemana);
         const actividades = horarioResponse.data.actividades || [];
 
         horasClase.value = actividades.map(hora => ({
@@ -134,8 +143,7 @@ const registrarFalta = async () => {
     try {
         cargando.value = true;
         for (const h of horasSeleccionadas) {
-            const guardiaURL = `http://localhost:8080/horario/guardia/dia/${diaSemana}/hora/${h.valor}`;
-            const guardiaResp = await axios.get(guardiaURL);
+            const guardiaResp = await getGuardiaByDayAndHour(diaSemana, h.valor);
             const profesores = guardiaResp.data.profesores || [];
 
             if (profesores.length === 0) {
@@ -164,15 +172,14 @@ const registrarFalta = async () => {
             };
 
             // Guardar la ausencia
-            await axios.post("http://localhost:8081/api/ausencias", ausenciaDTO, {
-                headers: { "Content-Type": "application/json" }
-            });
+            await createAusencia(ausenciaDTO);
 
             // Actualizar contador según tipo de grupo
-            const endpoint = esConflictivo
-                ? "incrementar-guardia-problematica"
-                : "incrementar-guardia-normal";
-            await axios.post(`http://localhost:8080/profesores/${endpoint}/${profesorSeleccionado.id}`);
+            if (esConflictivo) {
+                await incrementarGuardiaProblematica(profesorSeleccionado.id);
+            } else {
+                await incrementarGuardiaNormal(profesorSeleccionado.id);
+            }
         }
 
         toast.success("Ausencia registrada correctamente");
