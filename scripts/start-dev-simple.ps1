@@ -1,14 +1,12 @@
 # ============================================================================
 # SCRIPT DE DESARROLLO - Sistema de Gestion de Guardias
 # ============================================================================
-# Script optimizado para desarrollo con verificaciones y logging
+# Script para desarrollo con verificaciones
 # Uso: .\start-dev-simple.ps1 [all|frontend|backend|horarios|stop]
 
 param(
-    [string]$Action = "all"  # all, frontend, backend, horarios, stop
+    [string]$Action = "all"
 )
-
-$Host.UI.RawUI.WindowTitle = "Sistema Gestion Guardias - Desarrollo"
 
 Write-Host "============================================================================" -ForegroundColor Cyan
 Write-Host "                     MODO DESARROLLO ACTIVADO                              " -ForegroundColor Cyan
@@ -104,82 +102,25 @@ function Stop-AllServices {
     Write-Host "[OK] Servicios detenidos" -ForegroundColor Green
 }
 
-function Start-ServiceWithLogging {
+function Start-Service {
     param(
         [string]$ServiceName,
         [string]$Command,
         [string]$WorkingDirectory,
-        [string]$LogFile,
         [string]$Color = "White"
     )
     
     Write-Host "[*] Iniciando $ServiceName..." -ForegroundColor $Color
     
-    # Crear directorio de logs si no existe
-    $logsDir = "$PWD\logs"
-    if (-not (Test-Path $logsDir)) {
-        New-Item -ItemType Directory -Path $logsDir | Out-Null
-    }
-    
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $logPath = "$logsDir\$LogFile"
-    
     $scriptBlock = @"
 Set-Location '$WorkingDirectory'
-Write-Host "[$timestamp] [INFO] Iniciando $ServiceName en: $WorkingDirectory" -ForegroundColor $Color
-Write-Host "[$timestamp] [CMD] Comando: $Command" -ForegroundColor Gray
-Write-Host "[$timestamp] [LOG] Logs guardandose en: $logPath" -ForegroundColor Gray
-Write-Host "============================================================" -ForegroundColor Cyan
-
-# Ejecutar comando con logging
-$Command 2>&1 | Tee-Object -FilePath '$logPath'
+Write-Host '[INFO] Iniciando $ServiceName en: $WorkingDirectory' -ForegroundColor $Color
+Write-Host '[CMD] Comando: $Command' -ForegroundColor Gray
+Write-Host '============================================================' -ForegroundColor Cyan
+$Command
 "@
     
     Start-Process powershell -ArgumentList "-NoExit", "-Command", $scriptBlock
-}
-
-function Show-DevelopmentInfo {
-    Write-Host @"
-
-PANEL DE DESARROLLO
-============================================================================
-  Frontend (Vue.js + Vite)                                                 
-     URL: http://localhost:5500                                         
-     DevTools: http://localhost:5500/__devtools__/                      
-                                                                              
-  Backend Guardias (Spring Boot)                                          
-     API: http://localhost:8081                                          
-     Swagger: http://localhost:8081/swagger-ui.html                      
-     Health: http://localhost:8081/actuator/health                       
-                                                                              
-  Backend Horarios (Spring Boot)                                          
-     API: http://localhost:8082                                          
-     Swagger: http://localhost:8082/swagger-ui.html                      
-     Health: http://localhost:8082/actuator/health                       
-                                                                              
-  Logs de desarrollo: ./logs/                                             
-============================================================================
-"@ -ForegroundColor Cyan
-}
-
-function Show-QuickCommands {
-    Write-Host @"
-
-COMANDOS RAPIDOS:
- -> .\start-dev-simple.ps1 all       # Iniciar todo el stack
- -> .\start-dev-simple.ps1 frontend  # Solo frontend  
- -> .\start-dev-simple.ps1 backend   # Solo backend guardias
- -> .\start-dev-simple.ps1 horarios  # Solo backend horarios  
- -> .\start-dev-simple.ps1 stop      # Detener todos los servicios
- -> .\start-dev-simple.ps1 help      # Mostrar esta ayuda
-
-HERRAMIENTAS DE DESARROLLO:
- -> Hot Reload: Activado en todos los servicios
- -> Error Logging: Centralizado en ./logs/
- -> API Documentation: Swagger disponible
- -> Vue DevTools: Disponible en el navegador
-
-"@ -ForegroundColor Yellow
 }
 
 # ============================================================================
@@ -198,53 +139,48 @@ switch ($Action.ToLower()) {
         Stop-AllServices
         exit 0
     }
-    "help" {
-        Show-QuickCommands
-        exit 0
-    }
     "frontend" {
         Install-FrontendDependencies
         Write-Host "[*] Iniciando Frontend en modo desarrollo..." -ForegroundColor Cyan
-        Start-ServiceWithLogging "Frontend Vue.js" "npm run dev" "$PWD\apps\frontend" "frontend.log" "Cyan"
-        Show-DevelopmentInfo
+        Start-Service "Frontend Vue.js" "npm run dev" "$PWD\apps\frontend" "Cyan"
     }
     "backend" {
         Write-Host "[*] Iniciando Backend Guardias..." -ForegroundColor Green
-        Start-ServiceWithLogging "Backend Guardias" ".\mvnw.cmd spring-boot:run" "$PWD\apps\backend" "backend-guardias.log" "Green"
-        Show-DevelopmentInfo
+        Start-Service "Backend Guardias" ".\mvnw.cmd spring-boot:run" "$PWD\apps\backend" "Green"
     }
     "horarios" {
         Write-Host "[*] Iniciando Backend Horarios..." -ForegroundColor Magenta
-        Start-ServiceWithLogging "Backend Horarios" ".\mvnw.cmd spring-boot:run" "$PWD\apps\horarios" "backend-horarios.log" "Magenta"
-        Show-DevelopmentInfo
+        Start-Service "Backend Horarios" ".\mvnw.cmd spring-boot:run" "$PWD\apps\horarios" "Magenta"
     }
     "all" {
         Install-FrontendDependencies
         
         Write-Host "[*] Iniciando stack completo de desarrollo..." -ForegroundColor Green
-        Write-Host "[INFO] Los servicios se iniciaran en orden con delays para evitar conflictos..." -ForegroundColor Yellow
         
-        # Backend Horarios primero (más lento en arrancar)
-        Start-ServiceWithLogging "Backend Horarios" ".\mvnw.cmd spring-boot:run" "$PWD\apps\horarios" "backend-horarios.log" "Magenta"
+        # Backend Horarios primero
+        Start-Service "Backend Horarios" ".\mvnw.cmd spring-boot:run" "$PWD\apps\horarios" "Magenta"
         Start-Sleep -Seconds 3
         
         # Backend Guardias segundo
-        Start-ServiceWithLogging "Backend Guardias" ".\mvnw.cmd spring-boot:run" "$PWD\apps\backend" "backend-guardias.log" "Green"
+        Start-Service "Backend Guardias" ".\mvnw.cmd spring-boot:run" "$PWD\apps\backend" "Green"
         Start-Sleep -Seconds 3
         
-        # Frontend último (más rápido)
-        Start-ServiceWithLogging "Frontend Vue.js" "npm run dev" "$PWD\apps\frontend" "frontend.log" "Cyan"
+        # Frontend último
+        Start-Service "Frontend Vue.js" "npm run dev" "$PWD\apps\frontend" "Cyan"
         
-        Write-Host "[OK] Stack completo iniciandose..." -ForegroundColor Green
-        Write-Host "[INFO] El frontend estara disponible en ~30 segundos" -ForegroundColor Yellow
-        Write-Host "[INFO] Los backends tardaran 60-90 segundos en estar listos" -ForegroundColor Yellow
-        
-        Show-DevelopmentInfo
-        Show-QuickCommands
+        Write-Host @"
+
+[*] SERVICIOS INICIADOS:
+ -> Frontend: http://localhost:5500
+ -> Guardias: http://localhost:8081/swagger-ui.html  
+ -> Horarios: http://localhost:8082/swagger-ui.html
+
+[*] Listo para desarrollar!
+"@ -ForegroundColor Green
     }
     default {
         Write-Host "[ERROR] Accion no reconocida: $Action" -ForegroundColor Red
-        Show-QuickCommands
+        Write-Host "[INFO] Uso: .\start-dev-simple.ps1 [all|frontend|backend|horarios|stop]" -ForegroundColor Yellow
         exit 1
     }
 }

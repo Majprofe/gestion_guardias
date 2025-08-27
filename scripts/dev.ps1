@@ -1,7 +1,7 @@
 # ============================================================================
 # SCRIPT RAPIDO - Desarrollo Express
 # ============================================================================
-# Lanza todos los servicios rapidamente sin verificaciones extras
+# Lanza todos los servicios rapidamente
 # Uso: .\dev.ps1
 
 Write-Host "[*] Lanzamiento rapido - Gestion de Guardias" -ForegroundColor Yellow
@@ -10,19 +10,7 @@ Write-Host "[*] Lanzamiento rapido - Gestion de Guardias" -ForegroundColor Yello
 function Quick-Start {
     param([string]$name, [string]$cmd, [string]$dir, [string]$color)
     Write-Host "[*] $name..." -ForegroundColor $color
-    
-    # Crear directorio de logs si no existe
-    $logsDir = "$PWD\logs"
-    if (-not (Test-Path $logsDir)) {
-        New-Item -ItemType Directory -Path $logsDir | Out-Null
-    }
-    
-    # Generar nombre de archivo de log simple
-    $logName = $name.Replace(" ", "-").ToLower() + ".log"
-    $logPath = "$logsDir\$logName"
-    
-    $scriptCommand = "cd '$dir'; Write-Host '[INFO] $name en $dir' -ForegroundColor $color; Write-Host '[LOG] Guardando en: $logPath' -ForegroundColor Gray; $cmd"
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", $scriptCommand
+    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$dir'; Write-Host '[INFO] $name en $dir' -ForegroundColor $color; $cmd"
 }
 
 # Verificación rápida del .env

@@ -135,12 +135,12 @@ if (Test-Path "apps\frontend\node_modules") {
     Write-Host "[ERROR] Faltan" -ForegroundColor Red
 }
 
-Write-Host " -> Logs de desarrollo: " -NoNewline
-if (Test-Path "logs") {
-    $logFiles = Get-ChildItem "logs" -File | Measure-Object | Select-Object -ExpandProperty Count
-    Write-Host "[OK] $logFiles archivos" -ForegroundColor Green
+Write-Host " -> Directorio scripts: " -NoNewline
+if (Test-Path "scripts") {
+    $scriptFiles = Get-ChildItem "scripts" -File -Filter "*.ps1" | Measure-Object | Select-Object -ExpandProperty Count
+    Write-Host "[OK] $scriptFiles scripts" -ForegroundColor Green
 } else {
-    Write-Host "[INFO] No creados" -ForegroundColor Gray
+    Write-Host "[ERROR] No encontrado" -ForegroundColor Red
 }
 
 Write-Host " -> Certificados SSL: " -NoNewline
@@ -174,6 +174,6 @@ Write-Host "====================================================================
 Write-Host ""
 Write-Host "COMANDOS UTILES:" -ForegroundColor Cyan
 Write-Host " -> .\dev.ps1                  # Inicio rapido de todos los servicios"
-Write-Host " -> .\start-dev-simple.ps1     # Inicio con logs detallados"
+Write-Host " -> .\start-dev-simple.ps1     # Inicio con mas opciones"
 Write-Host " -> .\stop-dev.ps1             # Detener todos los servicios" 
 Write-Host " -> .\status-simple.ps1        # Ver este estado (ejecutar de nuevo)"

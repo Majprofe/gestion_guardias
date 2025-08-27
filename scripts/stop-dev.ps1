@@ -79,8 +79,7 @@ Estado de puertos:
  -> Puerto 8082 (Horarios): Libre
 
 Para volver a iniciar:
- -> .\dev.ps1           # Inicio rapido
- -> .\start-dev.ps1     # Inicio con logs
- -> .\start-service.ps1 # Inicio completo
+ -> .\dev.ps1                  # Inicio rapido
+ -> .\start-dev-simple.ps1     # Inicio con opciones
 
 "@ -ForegroundColor Green
