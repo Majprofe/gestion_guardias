@@ -126,7 +126,7 @@ public class XmlHorarioImporter {
             String email = profEl.getAttribute("email").trim();
 
 
-            Profesor profesor = new Profesor(id, nombre, abreviatura, departamento, email, 0, 0, null);
+            Profesor profesor = new Profesor(id, nombre, abreviatura, departamento, email, 0, 0, 0, null);
             profesorService.save(profesor);
         }
 

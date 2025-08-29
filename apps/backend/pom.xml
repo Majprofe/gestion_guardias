@@ -8,7 +8,7 @@
 		<version>3.3.5</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
-	<groupId>com.FranGarcia</groupId>
+	<groupId>es.iesjandula</groupId>
 	<artifactId>guardias-backend</artifactId>
 	<version>1.0.0</version>
 	<name>Guardias Backend</name>
