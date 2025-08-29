@@ -50,9 +50,46 @@ export const getCobertura = (ausenciaId, fecha) => guardiasAPI.get(`/api/cobertu
 export const deleteCoberturaByAusencia = (ausenciaId) => guardiasAPI.delete(`/api/coberturas/ausencia/${ausenciaId}`);
 export const asignarCobertura = (ausenciaId, profesorEmail) => guardiasAPI.post(`/api/coberturas/asignarCobertura/${ausenciaId}/${profesorEmail}`);
 
+// Archivos de ausencias
+export const subirArchivoAusencia = (formData) => guardiasAPI.post('/api/archivos/upload', formData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+});
+export const getArchivosByAusencia = (ausenciaId) => guardiasAPI.get(`/api/archivos/ausencia/${ausenciaId}`);
+export const downloadArchivo = (archivoId) => guardiasAPI.get(`/api/archivos/download/${archivoId}`, {
+  responseType: 'blob'
+});
+
+// Estadísticas y dashboards
+export const getDashboardEquidad = () => guardiasAPI.get('/api/estadisticas/dashboard-equidad');
+export const getReporteDesbalance = () => guardiasAPI.get('/api/estadisticas/reporte-desbalance');
+export const getContadoresProfesor = (profesorEmail) => guardiasAPI.get(`/api/estadisticas/profesor/${profesorEmail}/contadores`);
+export const getContadoresPorDiaHora = (dia, hora) => {
+  let url = '/api/estadisticas/contadores';
+  if (dia && hora) {
+    url += `/${dia}/${hora}`;
+  } else if (dia) {
+    url += `?dia=${dia}`;
+  } else if (hora) {
+    url += `?hora=${hora}`;
+  }
+  return guardiasAPI.get(url);
+};
+
 // ===============================
-// API HORARIOS (Puerto 8082)
+// API HORARIOS (Puerto 8082) - NUEVAS FUNCIONES
 // ===============================
+
+// Profesores con guardias detalladas
+export const getProfesoresConGuardias = () => horariosAPI.get('/profesores/guardias');
+export const getProfesorGuardiasDetalle = (email) => horariosAPI.get(`/profesores/${email}/guardias-detalle`);
+
+// Actualización de contadores
+export const actualizarContadoresProfesor = (email, contadorData) => horariosAPI.put(`/profesores/${email}/contadores`, contadorData);
+export const actualizarContadoresLote = (contadoresData) => horariosAPI.post('/profesores/contadores/batch', contadoresData);
+
+// Contadores específicos
+export const getContadorEspecifico = (email, dia, hora) => horariosAPI.get(`/profesores/${email}/contadores/${dia}/${hora}`);
+export const resetearContadoresProfesor = (email) => horariosAPI.delete(`/profesores/${email}/contadores`);
 
 // Horarios
 export const getHorarioByIdProfesor = (id) => horariosAPI.get(`/horario/${id}`);
@@ -71,6 +108,72 @@ export const incrementarGuardiaProblematica = (id) => horariosAPI.post(`/profeso
 
 // Tramos Horarios
 export const getTramosHorario = () => horariosAPI.get('/tramohorarios');
+
+// ===============================
+// 🔄 INTEGRACIÓN AVANZADA Y SINCRONIZACIÓN
+// ===============================
+
+// === IMPORTACIÓN DE XML HORARIOS ===
+export const importarXmlHorarios = (archivo) => {
+  const formData = new FormData();
+  formData.append('archivo', archivo);
+  return horariosAPI.post('/horarios/importar-xml', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+};
+
+// === SINCRONIZACIÓN BIDIRECCIONAL ===
+export const sincronizarGuardiasConHorarios = () => guardiasAPI.post('/api/sincronizacion/sincronizar-horarios');
+export const verificarCoherenciaHorarios = () => guardiasAPI.get('/api/sincronizacion/verificar-coherencia');
+export const aplicarCambiosHorarios = (cambios) => guardiasAPI.post('/api/sincronizacion/aplicar-cambios', cambios);
+export const getEstadoSincronizacion = () => guardiasAPI.get('/api/sincronizacion/estado');
+
+// === MONITOREO EN TIEMPO REAL ===
+export const getMonitoreoTiempoReal = () => guardiasAPI.get('/api/monitoreo/tiempo-real');
+export const actualizarEstadoProfesor = (email, estado) => guardiasAPI.post(`/api/profesores/${email}/estado`, { estado });
+export const getNotificacionesPendientes = () => guardiasAPI.get('/api/notificaciones/pendientes');
+export const marcarNotificacionLeida = (id) => guardiasAPI.post(`/api/notificaciones/${id}/leida`);
+
+// === CONTADORES DINÁMICOS ===
+export const recalcularTodosContadores = () => guardiasAPI.post('/api/contadores/recalcular-todos');
+export const getContadoresPorDia = (dia) => guardiasAPI.get(`/api/contadores/dia/${dia}`);
+export const getContadoresPorHora = (hora) => guardiasAPI.get(`/api/contadores/hora/${hora}`);
+
+// === VALIDACIÓN Y COHERENCIA ===
+export const validarAsignacionCoherencia = (ausenciaId, profesorEmail) => 
+  guardiasAPI.post('/api/validacion/asignacion-coherencia', { ausenciaId, profesorEmail });
+export const getConflictosHorarios = () => guardiasAPI.get('/api/validacion/conflictos-horarios');
+export const resolverConflictoHorario = (conflictoId, solucion) => 
+  guardiasAPI.post(`/api/validacion/conflictos/${conflictoId}/resolver`, solucion);
+
+// === REPORTES AVANZADOS ===
+export const getReporteCobertura = (fechaInicio, fechaFin) => 
+  guardiasAPI.get('/api/reportes/cobertura', { params: { fechaInicio, fechaFin } });
+export const getReporteDistribucion = (mes) => 
+  guardiasAPI.get('/api/reportes/distribucion', { params: { mes } });
+export const getReporteRendimiento = () => guardiasAPI.get('/api/reportes/rendimiento');
+export const exportarReporte = (tipoReporte, formato) => 
+  guardiasAPI.get(`/api/reportes/${tipoReporte}/exportar/${formato}`, { responseType: 'blob' });
+
+// === GESTIÓN AVANZADA DE COBERTURAS ===
+export const getCoberturas = (filtros = {}) => guardiasAPI.get('/api/coberturas', { params: filtros });
+export const actualizarEstadoCobertura = (id, estado) => 
+  guardiasAPI.put(`/api/coberturas/${id}/estado`, { estado });
+export const redistribuirCoberturasDia = (fecha) => 
+  guardiasAPI.post('/api/coberturas/redistribuir-dia', { fecha });
+
+// === NUEVAS FUNCIONES ESTADÍSTICAS ===
+export const getProfesorMasGuardias = () => guardiasAPI.get('/api/estadisticas/profesor-mas-guardias');
+export const getProfesorMenosGuardias = () => guardiasAPI.get('/api/estadisticas/profesor-menos-guardias');
+export const getGuardiasPorDia = () => guardiasAPI.get('/api/estadisticas/guardias-por-dia');
+export const getGuardiasPorHora = () => guardiasAPI.get('/api/estadisticas/guardias-por-hora');
+export const getDiaMasGuardias = () => guardiasAPI.get('/api/estadisticas/dia-mas-guardias');
+export const getHoraMasGuardias = () => guardiasAPI.get('/api/estadisticas/hora-mas-guardias');
+export const getProblemasSistema = () => guardiasAPI.get('/api/estadisticas/problemas-sistema');
+export const getMensajeAlerta = () => guardiasAPI.get('/api/estadisticas/mensaje-alerta');
+export const getMetricasGenerales = () => guardiasAPI.get('/api/estadisticas/metricas-generales');
+export const getDistribucionTipoGuardias = () => guardiasAPI.get('/api/estadisticas/tipos-guardias');
+export const getEvolucionMensual = () => guardiasAPI.get('/api/estadisticas/evolucion-mensual');
 
 // ===============================
 // INTERCEPTORS PARA MANEJO DE ERRORES

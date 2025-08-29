@@ -42,6 +42,51 @@
                 </div>
             </transition-group>
 
+            <!-- Sección de archivos adjuntos -->
+            <div class="form-group" v-if="horasClase.length">
+                <label class="form-label">📎 Archivos Adjuntos (opcional):</label>
+                <div class="archivos-container">
+                    <div class="drag-drop-area" 
+                         @drop="onDrop" 
+                         @dragover="onDragOver" 
+                         @dragenter="onDragEnter" 
+                         @dragleave="onDragLeave"
+                         :class="{ 'drag-active': dragActive }"
+                         @click="$refs.fileInput.click()">
+                        <div class="drag-drop-content">
+                            <div class="upload-icon">📁</div>
+                            <p><strong>Arrastra archivos aquí</strong> o haz clic para seleccionar</p>
+                            <p class="upload-hint">PDF, DOC, DOCX, TXT, JPG, PNG (máx. 10MB cada uno)</p>
+                        </div>
+                        <input 
+                            ref="fileInput"
+                            type="file" 
+                            multiple 
+                            @change="onFileSelect" 
+                            accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png"
+                            style="display: none"
+                        />
+                    </div>
+                    
+                    <!-- Lista de archivos seleccionados -->
+                    <div v-if="archivosSeleccionados.length" class="archivos-lista">
+                        <h4>📋 Archivos seleccionados:</h4>
+                        <div v-for="(archivo, index) in archivosSeleccionados" :key="index" class="archivo-item">
+                            <div class="archivo-info">
+                                <span class="archivo-icon">{{ getFileIcon(archivo.name) }}</span>
+                                <div class="archivo-details">
+                                    <span class="archivo-nombre">{{ archivo.name }}</span>
+                                    <span class="archivo-size">{{ formatFileSize(archivo.size) }}</span>
+                                </div>
+                            </div>
+                            <button type="button" @click="removeFile(index)" class="btn-remove-file" title="Eliminar archivo">
+                                ❌
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="form-buttons" v-if="horasClase.length">
                 <button type="submit" class="btn btn-primary" :disabled="cargando">
                     <span v-if="cargando" class="spinner"></span>
@@ -63,7 +108,8 @@ import {
   getGuardiaByDayAndHour,
   createAusencia,
   incrementarGuardiaNormal,
-  incrementarGuardiaProblematica
+  incrementarGuardiaProblematica,
+  subirArchivoAusencia
 } from '@/services/apiService'
 import { useToast } from "vue-toastification";
 import { useUserStore } from '@/stores/user';
@@ -79,6 +125,8 @@ const diaCompleto = ref("");
 const horasClase = ref([]);
 const errorFecha = ref(false);
 const cargando = ref(false);
+const archivosSeleccionados = ref([]);
+const dragActive = ref(false);
 
 onMounted(() => {
     const hoy = new Date();
@@ -182,6 +230,11 @@ const registrarFalta = async () => {
             }
         }
 
+        // Subir archivos si hay algunos seleccionados
+        if (archivosSeleccionados.value.length > 0) {
+            await subirArchivos(ausenciaResponse.data.id);
+        }
+
         toast.success("Ausencia registrada correctamente");
 
         setTimeout(() => {
@@ -195,11 +248,109 @@ const registrarFalta = async () => {
     }
 };
 
+// Métodos para manejo de archivos
+const onFileSelect = (event) => {
+    const files = Array.from(event.target.files);
+    addFiles(files);
+};
+
+const onDrop = (event) => {
+    event.preventDefault();
+    dragActive.value = false;
+    const files = Array.from(event.dataTransfer.files);
+    addFiles(files);
+};
+
+const onDragOver = (event) => {
+    event.preventDefault();
+};
+
+const onDragEnter = (event) => {
+    event.preventDefault();
+    dragActive.value = true;
+};
+
+const onDragLeave = (event) => {
+    event.preventDefault();
+    dragActive.value = false;
+};
+
+const addFiles = (files) => {
+    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'image/jpeg', 'image/jpg', 'image/png'];
+    const maxSize = 10 * 1024 * 1024; // 10MB
+
+    for (const file of files) {
+        // Validar tipo
+        if (!allowedTypes.includes(file.type)) {
+            toast.error(`Tipo de archivo no permitido: ${file.name}`);
+            continue;
+        }
+        
+        // Validar tamaño
+        if (file.size > maxSize) {
+            toast.error(`Archivo demasiado grande: ${file.name}. Máximo 10MB.`);
+            continue;
+        }
+        
+        // Verificar si ya existe
+        if (archivosSeleccionados.value.some(f => f.name === file.name && f.size === file.size)) {
+            toast.warning(`Archivo ya seleccionado: ${file.name}`);
+            continue;
+        }
+        
+        archivosSeleccionados.value.push(file);
+    }
+};
+
+const removeFile = (index) => {
+    archivosSeleccionados.value.splice(index, 1);
+};
+
+const getFileIcon = (fileName) => {
+    const ext = fileName.split('.').pop().toLowerCase();
+    const icons = {
+        'pdf': '📄',
+        'doc': '📝',
+        'docx': '📝',
+        'txt': '📃',
+        'jpg': '🖼️',
+        'jpeg': '🖼️',
+        'png': '🖼️'
+    };
+    return icons[ext] || '📎';
+};
+
+const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+const subirArchivos = async (ausenciaId) => {
+    try {
+        for (const archivo of archivosSeleccionados.value) {
+            const formData = new FormData();
+            formData.append('archivo', archivo);
+            formData.append('ausenciaId', ausenciaId);
+            
+            await subirArchivoAusencia(formData);
+        }
+        toast.success(`${archivosSeleccionados.value.length} archivo(s) subido(s) correctamente`);
+    } catch (error) {
+        console.error('Error subiendo archivos:', error);
+        toast.warning('Ausencia creada, pero hubo errores subiendo algunos archivos');
+    }
+};
+
 
 const limpiarFormulario = () => {
     fecha.value = "";
     diaCompleto.value = "";
     horasClase.value = [];
+    archivosSeleccionados.value = [];
+    dragActive.value = false;
 };
 </script>
 
@@ -397,5 +548,102 @@ button {
     .toggle-group {
         flex-direction: column;
     }
+}
+
+/* Estilos para archivos adjuntos */
+.archivos-container {
+    margin-top: 10px;
+}
+
+.drag-drop-area {
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+    padding: 30px;
+    text-align: center;
+    background: #fafafa;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.drag-drop-area:hover,
+.drag-drop-area.drag-active {
+    border-color: #1f86a1;
+    background: #f0f8ff;
+}
+
+.drag-drop-content .upload-icon {
+    font-size: 3em;
+    margin-bottom: 10px;
+}
+
+.drag-drop-content p {
+    margin: 5px 0;
+    color: #666;
+}
+
+.upload-hint {
+    font-size: 12px;
+    color: #999;
+}
+
+.archivos-lista {
+    margin-top: 15px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.archivos-lista h4 {
+    margin-top: 0;
+    color: #333;
+}
+
+.archivo-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    margin: 8px 0;
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.archivo-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.archivo-icon {
+    font-size: 1.5em;
+}
+
+.archivo-details {
+    display: flex;
+    flex-direction: column;
+}
+
+.archivo-nombre {
+    font-weight: 600;
+    color: #333;
+}
+
+.archivo-size {
+    font-size: 12px;
+    color: #666;
+}
+
+.btn-remove-file {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 50%;
+    transition: background 0.2s;
+}
+
+.btn-remove-file:hover {
+    background: rgba(255, 0, 0, 0.1);
 }
 </style>

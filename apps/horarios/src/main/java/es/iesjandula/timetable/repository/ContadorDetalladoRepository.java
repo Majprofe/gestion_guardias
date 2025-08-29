@@ -16,15 +16,15 @@ public interface ContadorDetalladoRepository extends JpaRepository<ContadorDetal
     /**
      * Busca contador específico por profesor, día y hora
      */
-    Optional<ContadorDetallado> findByProfesorAndDiaAndHora(Profesor profesor, Integer dia, Integer hora);
+    Optional<ContadorDetallado> findByProfesorAndDiaSemanaAndHoraDia(Profesor profesor, Integer diaSemana, Integer horaDia);
 
     /**
      * Busca contador específico por email del profesor, día y hora
      */
-    @Query("SELECT cd FROM ContadorDetallado cd WHERE cd.profesor.email = :email AND cd.dia = :dia AND cd.hora = :hora")
+    @Query("SELECT cd FROM ContadorDetallado cd WHERE cd.profesor.email = :email AND cd.diaSemana = :diaSemana AND cd.horaDia = :horaDia")
     Optional<ContadorDetallado> findByProfesorEmailAndDiaAndHora(@Param("email") String email, 
-                                                                  @Param("dia") Integer dia, 
-                                                                  @Param("hora") Integer hora);
+                                                                  @Param("diaSemana") Integer diaSemana, 
+                                                                  @Param("horaDia") Integer horaDia);
 
     /**
      * Obtiene todos los contadores de un profesor
@@ -40,17 +40,17 @@ public interface ContadorDetalladoRepository extends JpaRepository<ContadorDetal
     /**
      * Obtiene contadores de un día específico para todos los profesores
      */
-    List<ContadorDetallado> findByDia(Integer dia);
+    List<ContadorDetallado> findByDiaSemana(Integer diaSemana);
 
     /**
      * Obtiene contadores de una hora específica para todos los profesores
      */
-    List<ContadorDetallado> findByHora(Integer hora);
+    List<ContadorDetallado> findByHoraDia(Integer horaDia);
 
     /**
      * Obtiene contadores de un día y hora específicos
      */
-    List<ContadorDetallado> findByDiaAndHora(Integer dia, Integer hora);
+    List<ContadorDetallado> findByDiaSemanaAndHoraDia(Integer diaSemana, Integer horaDia);
 
     /**
      * Calcula el total de guardias normales de un profesor

@@ -129,7 +129,7 @@ public class ProfesorService {
 
         // Buscar o crear contador detallado
         ContadorDetallado contador = contadorDetalladoRepository
-                .findByProfesorAndDiaAndHora(profesor, contadorDto.getDia(), contadorDto.getHora())
+                .findByProfesorAndDiaSemanaAndHoraDia(profesor, contadorDto.getDia(), contadorDto.getHora())
                 .orElse(new ContadorDetallado(profesor, contadorDto.getDia(), contadorDto.getHora()));
 
         // Aplicar cambios según el tipo de operación

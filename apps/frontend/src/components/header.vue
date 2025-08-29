@@ -31,6 +31,14 @@
         <img class="link-icon" src="../assets/historico.png" alt="Histórico" />
         <span class="link-title">Histórico</span>
       </router-link>
+      <router-link v-if="isAdmin" to="/estadisticas" class="link" title="Estadísticas">
+        <div class="link-icon emoji-icon">📊</div>
+        <span class="link-title">Estadísticas</span>
+      </router-link>
+      <router-link v-if="isAdmin" to="/admin" class="link" title="Admin Panel">
+        <div class="link-icon emoji-icon">🛠️</div>
+        <span class="link-title">Admin</span>
+      </router-link>
       <router-link to="/mis-guardias" class="link" title="Guardias">
         <img class="link-icon" src="../assets/cobertura.png" alt="Mis Guardias" />
         <span class="link-title">Guardias</span>
@@ -268,6 +276,15 @@ onMounted(async () => {
     height: 24px;
   }
 
+  .emoji-icon {
+    width: 24px !important;
+    height: 24px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+  }
+
   .link-title {
     font-size: 10px;
   }
@@ -309,6 +326,12 @@ onMounted(async () => {
   .link-icon {
     width: 32px;
     height: 32px;
+  }
+
+  .emoji-icon {
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 24px;
   }
 
   .link-title {
