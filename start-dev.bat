@@ -35,17 +35,35 @@ if %errorlevel% == 0 (
 timeout /t 2 >nul
 
 echo.
-echo 2. Iniciando Backend Guardias (puerto 8081)...
+echo 2. Verificando dependencias del frontend...
+if not exist "apps\frontend\node_modules" (
+    echo   📦 node_modules no encontrado, instalando dependencias...
+    cd apps\frontend
+    echo   Ejecutando npm install...
+    npm install
+    if %errorlevel% neq 0 (
+        echo   ❌ Error al instalar dependencias. Verifica que Node.js y npm estén instalados.
+        pause
+        exit /b 1
+    )
+    echo   ✅ Dependencias instaladas correctamente
+    cd ..\..
+) else (
+    echo   ✅ Dependencias ya instaladas
+)
+
+echo.
+echo 3. Iniciando Backend Guardias (puerto 8081)...
 start "Backend Guardias" cmd /k "cd apps\backend && mvn spring-boot:run"
 
 timeout /t 8 /nobreak >nul
 
-echo 3. Iniciando Backend Horarios (puerto 8082)...
+echo 4. Iniciando Backend Horarios (puerto 8082)...
 start "Backend Horarios" cmd /k "cd apps\horarios && mvn spring-boot:run"
 
 timeout /t 8 /nobreak >nul
 
-echo 4. Iniciando Frontend (puerto 5500)...
+echo 5. Iniciando Frontend (puerto 5500)...
 start "Frontend" cmd /k "cd apps\frontend && npm run dev"
 
 echo.
