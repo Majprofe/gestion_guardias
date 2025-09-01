@@ -1,8 +1,8 @@
 import axios from 'axios';
 
-// URLs de las APIs desde variables de entorno
-const API_GUARDIAS = import.meta.env.VITE_API_URL;
-const API_HORARIOS = import.meta.env.VITE_PLATFORM_URL;
+// URLs de las APIs (directas, sin variables de entorno)
+const API_GUARDIAS = 'http://localhost:8081';
+const API_HORARIOS = 'http://localhost:8082';
 
 // Configuración base de axios
 const guardiasAPI = axios.create({

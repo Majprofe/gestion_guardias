@@ -116,7 +116,7 @@ import { useUserStore } from '@/stores/user';
 
 const toast = useToast();
 const userStore = useUserStore();
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = 'http://localhost:8081';
 
 const correo = ref("");
 const fecha = ref("");

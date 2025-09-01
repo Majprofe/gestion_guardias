@@ -45,19 +45,26 @@ const profesorNombre = ref('')
 const horarioTransformado = ref({})
 
 watch(
-    () => userStore.nombreUsuario,
+    () => userStore.getUserEmail, // Usar email en lugar de nombre
     async (email) => {
-        if (email && email !== "Sin usuario") {
+        if (email && email !== "Sin usuario" && email !== "") {
             try {
-                const response = await getHorarioByProfesorEmail(email)
+                console.log('🔍 Cargando horario para email:', email);
+                
+                const response = await getHorarioByProfesorEmail(email);
+                
                 profesorNombre.value = response.data.profesorNombre
                 horario.value = response.data.horario
                 transformarHorario()
+                
+                console.log('✅ Horario cargado correctamente');
             } catch (error) {
+                console.error("Error al cargar el horario:", error);
                 toast.error("Error al cargar el horario del profesor.")
-                setTimeout(() => {
-                    window.location.href = "/";
-                }, 4000);
+                // Comentamos la redirección automática para debugging
+                // setTimeout(() => {
+                //     window.location.href = "/";
+                // }, 4000);
             }
         }
     },
@@ -65,6 +72,8 @@ watch(
 )
 
 function transformarHorario() {
+    if (!horario.value) return;
+    
     const nuevoHorario = {}
 
     const diasSemana = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes']

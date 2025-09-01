@@ -4,6 +4,26 @@ echo   Sistema de Gestion de Guardias - DEV
 echo =========================================
 
 echo.
+echo 0. Cargando variables de entorno...
+if exist ".env" (
+    echo   📁 Archivo .env encontrado, cargando configuración...
+    for /f "tokens=1,2 delims==" %%a in ('type .env ^| findstr /v "^#" ^| findstr "="') do (
+        set %%a=%%b
+    )
+    echo   ✅ Variables de entorno cargadas
+) else (
+    echo   ⚠️  Archivo .env no encontrado, usando valores por defecto
+    set DATABASE_URL=jdbc:mysql://localhost:3306/gestion_guardias?useSSL=false^&serverTimezone=UTC^&allowPublicKeyRetrieval=true
+    set DATABASE_USERNAME=root
+    set DATABASE_PASSWORD=toor
+)
+
+echo   🔍 Configuración de base de datos:
+echo   URL: %DATABASE_URL%
+echo   Usuario: %DATABASE_USERNAME%
+echo   Password: %DATABASE_PASSWORD%
+
+echo.
 echo 1. Verificando puertos...
 netstat -ano | findstr ":8081" >nul
 if %errorlevel% == 0 (
@@ -54,12 +74,12 @@ if not exist "apps\frontend\node_modules" (
 
 echo.
 echo 3. Iniciando Backend Guardias (puerto 8081)...
-start "Backend Guardias" cmd /k "cd apps\backend && mvn spring-boot:run"
+start "Backend Guardias" cmd /k "set DATABASE_URL=%DATABASE_URL% && set DATABASE_USERNAME=%DATABASE_USERNAME% && set DATABASE_PASSWORD=%DATABASE_PASSWORD% && cd apps\backend && mvn spring-boot:run"
 
 timeout /t 8 /nobreak >nul
 
 echo 4. Iniciando Backend Horarios (puerto 8082)...
-start "Backend Horarios" cmd /k "cd apps\horarios && mvn spring-boot:run"
+start "Backend Horarios" cmd /k "set DATABASE_URL=%DATABASE_URL% && set DATABASE_USERNAME=%DATABASE_USERNAME% && set DATABASE_PASSWORD=%DATABASE_PASSWORD% && cd apps\horarios && mvn spring-boot:run"
 
 timeout /t 8 /nobreak >nul
 
