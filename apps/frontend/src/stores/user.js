@@ -11,10 +11,9 @@ export const useUserStore = defineStore('user', () => {
     const isAuthenticated = ref(false);
     const loading = ref(false);
 
-    // 🎛️ Configuración de autenticación dual (valores fijos para desarrollo)
-    const authMode = 'google'; // Modo fijo para desarrollo
-    const devAllowedDomain = 'iesjandula.es'; // Dominio permitido para desarrollo
-    const googleWorkspaceDomain = 'g.educaand.es'; // Dominio Google Workspace
+    // 🎛️ Configuración de autenticación (desde variables de entorno)
+    const authMode = import.meta.env.VITE_AUTH_MODE || 'email'; // Modo desde .env
+    // ❌ Dominios eliminados - no hay restricciones de email
 
     // Getters computados
     const getUserEmail = computed(() => usuario.value?.email || '');
@@ -71,7 +70,8 @@ export const useUserStore = defineStore('user', () => {
         // Normalizar user: si es string, crear objeto con email
         const userObj = typeof user === 'string' ? { email: user } : user;
         
-        // Verificar dominio según el modo
+        // Validación de dominio deshabilitada - se valida en el login
+        /*
         if (!checkEmailDomain(userObj.email)) {
             if (isSupabaseAuth) {
                 await logout();
@@ -79,6 +79,7 @@ export const useUserStore = defineStore('user', () => {
             const allowedDomain = isEmailMode.value ? devAllowedDomain : googleWorkspaceDomain;
             throw new Error(`Solo se permiten cuentas del dominio @${allowedDomain}`);
         }
+        */
 
         usuario.value = userObj;
         isAuthenticated.value = true;
@@ -132,9 +133,8 @@ export const useUserStore = defineStore('user', () => {
     const loginWithEmail = async (email, password) => {
         loading.value = true;
         try {
-            if (!checkEmailDomain(email)) {
-                throw new Error(`Solo se permiten emails del dominio @${devAllowedDomain}`);
-            }
+            // Validación de dominio eliminada - ya se valida en el login
+            console.log('✅ Email validation handled by login system');
 
             // ✅ MODO DESARROLLO: Autenticación completamente local
             console.log('🧪 Modo desarrollo: usando autenticación local');
@@ -217,16 +217,7 @@ export const useUserStore = defineStore('user', () => {
         }
     };
 
-    const checkEmailDomain = (email) => {
-        // Si email es undefined, null o vacío, retornar false
-        if (!email || typeof email !== 'string') {
-            return false;
-        }
-        
-        const allowedDomain = isEmailMode.value ? devAllowedDomain : googleWorkspaceDomain;
-        const domain = email.split('@')[1];
-        return domain === allowedDomain;
-    };
+    // ❌ Función de validación de dominio eliminada - ya no necesaria
 
     const logout = async () => {
         try {
@@ -269,10 +260,7 @@ export const useUserStore = defineStore('user', () => {
         loginWithGoogle,
         logout,
         resetUser,
-        checkEmailDomain,
         // Configuración
-        authMode,
-        devAllowedDomain,
-        googleWorkspaceDomain
+        authMode
     };
 });

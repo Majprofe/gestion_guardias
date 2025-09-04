@@ -2,6 +2,7 @@ package es.iesjandula.guardias.services;
 
 import es.iesjandula.guardias.dto.AusenciaConGuardiasDTO;
 import es.iesjandula.guardias.dto.CrearAusenciaDTO;
+import es.iesjandula.guardias.dto.CrearAusenciaMultipleDTO;
 import es.iesjandula.guardias.exception.BusinessException;
 import es.iesjandula.guardias.exception.ResourceNotFoundException;
 import es.iesjandula.guardias.models.*;
@@ -106,6 +107,69 @@ public class AusenciaService {
 
         // Convertir a DTO de respuesta (con ID)
         return convertirAusenciaADTO(ausencia);
+    }
+
+    /**
+     * Guarda múltiples ausencias para un día y asigna coberturas automáticamente.
+     * 
+     * @param crearDto DTO con los datos de las ausencias múltiples.
+     * @return Lista de AusenciaConGuardiasDTO con los IDs generados.
+     * @throws BusinessException Si alguna de las ausencias ya existe.
+     */
+    public List<AusenciaConGuardiasDTO> guardarYAsignarCoberturaMultiple(CrearAusenciaMultipleDTO crearDto) {
+        logger.debug("Intentando guardar ausencias múltiples: {}", crearDto);
+
+        List<AusenciaConGuardiasDTO> resultados = new ArrayList<>();
+        
+        // Verificar si ya existen ausencias para las horas especificadas
+        for (CrearAusenciaMultipleDTO.HoraAusenciaDTO horaDto : crearDto.getHoras()) {
+            if (ausenciaRepository.existsByProfesorAusenteEmailAndFechaAndHora(
+                    crearDto.getProfesorAusenteEmail(), crearDto.getFecha(), horaDto.getHora())) {
+                logger.warn("La ausencia ya existe para el profesor {} en fecha {} y hora {}",
+                        crearDto.getProfesorAusenteEmail(), crearDto.getFecha(), horaDto.getHora());
+                throw new BusinessException(
+                    "Ya existe una ausencia registrada para el profesor " + crearDto.getProfesorAusenteEmail() + 
+                    " en la fecha " + crearDto.getFecha() + " y hora " + horaDto.getHora(),
+                    HttpStatus.CONFLICT
+                );
+            }
+        }
+
+        // Crear todas las ausencias
+        for (CrearAusenciaMultipleDTO.HoraAusenciaDTO horaDto : crearDto.getHoras()) {
+            Ausencia ausencia = new Ausencia();
+            ausencia.setProfesorAusenteEmail(crearDto.getProfesorAusenteEmail());
+            ausencia.setFecha(crearDto.getFecha());
+            ausencia.setHora(horaDto.getHora());
+            ausencia.setTarea(horaDto.getTarea());
+            ausencia.setGrupo(horaDto.getGrupo());
+            ausencia.setAula(horaDto.getAula());
+
+            // Guardar en BD
+            ausencia = ausenciaRepository.save(ausencia);
+            logger.info("Ausencia guardada con ID generado automáticamente: {}", ausencia.getId());
+
+            // Convertir a DTO y agregar a resultados
+            resultados.add(convertirAusenciaADTO(ausencia));
+        }
+
+        // Redistribución automática para todas las ausencias del día
+        try {
+            // Redistribuir todas las coberturas del día considerando las nuevas ausencias
+            for (AusenciaConGuardiasDTO ausenciaDto : resultados) {
+                Ausencia ausencia = ausenciaRepository.findById(ausenciaDto.getId()).orElse(null);
+                if (ausencia != null) {
+                    asignacionGuardiasService.redistribuirCoberturasPorNuevaAusencia(ausencia);
+                }
+            }
+            logger.info("Redistribución automática completada para {} ausencias en fecha {}", 
+                       resultados.size(), crearDto.getFecha());
+        } catch (Exception e) {
+            logger.error("Error en redistribución automática para ausencias múltiples en fecha {}: {}", 
+                        crearDto.getFecha(), e.getMessage());
+        }
+
+        return resultados;
     }
 
     /**

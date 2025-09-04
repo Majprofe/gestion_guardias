@@ -2,6 +2,7 @@ package es.iesjandula.guardias.controllers;
 
 import es.iesjandula.guardias.dto.AusenciaConGuardiasDTO;
 import es.iesjandula.guardias.dto.CrearAusenciaDTO;
+import es.iesjandula.guardias.dto.CrearAusenciaMultipleDTO;
 import es.iesjandula.guardias.services.AusenciaService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -34,6 +35,16 @@ public class AusenciaController {
     public ResponseEntity<AusenciaConGuardiasDTO> crearAusencia(@RequestBody CrearAusenciaDTO crearAusenciaDTO) {
         AusenciaConGuardiasDTO ausencia = ausenciaService.guardarYAsignarCobertura(crearAusenciaDTO);
         return ResponseEntity.ok(ausencia);
+    }
+    
+    /**
+     * Crea múltiples ausencias para un día completo
+     */
+    @PostMapping("/multiple")
+    @Operation(summary = "Crear ausencias múltiples", description = "Crea múltiples ausencias para un día completo y asigna automáticamente las guardias")
+    public ResponseEntity<List<AusenciaConGuardiasDTO>> crearAusenciaMultiple(@RequestBody CrearAusenciaMultipleDTO crearAusenciaMultipleDTO) {
+        List<AusenciaConGuardiasDTO> ausencias = ausenciaService.guardarYAsignarCoberturaMultiple(crearAusenciaMultipleDTO);
+        return ResponseEntity.ok(ausencias);
     }
     
     /**

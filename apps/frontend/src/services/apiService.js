@@ -1,8 +1,8 @@
 import axios from 'axios';
 
-// URLs de las APIs (directas, sin variables de entorno)
-const API_GUARDIAS = 'http://localhost:8081';
-const API_HORARIOS = 'http://localhost:8082';
+// URLs de las APIs desde variables de entorno
+const API_GUARDIAS = import.meta.env.VITE_API_URL;
+const API_HORARIOS = import.meta.env.VITE_PLATFORM_URL;
 
 // Configuración base de axios
 const guardiasAPI = axios.create({
@@ -34,13 +34,14 @@ export const getGrupos = () => guardiasAPI.get('/api/grupos');
 // Profesores
 export const getProfesores = () => guardiasAPI.get('/api/profesores');
 export const getProfesorById = (id) => guardiasAPI.get(`/api/profesores/${id}`);
-export const getProfesorByEmail = (email) => guardiasAPI.get(`/api/profesores/email/${email}`);
+export const getProfesorByEmail = (email) => guardiasAPI.get(`/api/profesores/email/${encodeURIComponent(email)}`);
 
 // Ausencias
 export const getAusenciasByProfesor = (email) => guardiasAPI.get(`/api/ausencias/por-profesor/${encodeURIComponent(email)}`);
 export const getAusenciasByFecha = (fecha) => guardiasAPI.get('/api/ausencias/por-fecha', { params: { fecha } });
 export const getAusenciasHistorico = () => guardiasAPI.get('/api/ausencias/historico');
 export const createAusencia = (ausenciaDTO) => guardiasAPI.post('/api/ausencias', ausenciaDTO);
+export const createAusenciaMultiple = (ausenciaMultipleDTO) => guardiasAPI.post('/api/ausencias/multiple', ausenciaMultipleDTO);
 export const deleteAusencia = (id) => guardiasAPI.delete(`/api/ausencias/${id}`);
 
 // Coberturas
@@ -81,26 +82,27 @@ export const getContadoresPorDiaHora = (dia, hora) => {
 
 // Profesores con guardias detalladas
 export const getProfesoresConGuardias = () => horariosAPI.get('/profesores/guardias');
-export const getProfesorGuardiasDetalle = (email) => horariosAPI.get(`/profesores/${email}/guardias-detalle`);
+export const getProfesorGuardiasDetalle = (email) => horariosAPI.get(`/profesores/${encodeURIComponent(email)}/guardias-detalle`);
 
 // Actualización de contadores
-export const actualizarContadoresProfesor = (email, contadorData) => horariosAPI.put(`/profesores/${email}/contadores`, contadorData);
+export const actualizarContadoresProfesor = (email, contadorData) => horariosAPI.put(`/profesores/${encodeURIComponent(email)}/contadores`, contadorData);
 export const actualizarContadoresLote = (contadoresData) => horariosAPI.post('/profesores/contadores/batch', contadoresData);
 
 // Contadores específicos
-export const getContadorEspecifico = (email, dia, hora) => horariosAPI.get(`/profesores/${email}/contadores/${dia}/${hora}`);
-export const resetearContadoresProfesor = (email) => horariosAPI.delete(`/profesores/${email}/contadores`);
+export const getContadorEspecifico = (email, dia, hora) => horariosAPI.get(`/profesores/${encodeURIComponent(email)}/contadores/${dia}/${hora}`);
+export const resetearContadoresProfesor = (email) => horariosAPI.delete(`/profesores/${encodeURIComponent(email)}/contadores`);
 
 // Horarios
 export const getHorarioByIdProfesor = (id) => horariosAPI.get(`/horario/${id}`);
 export const getHorarioByProfesorEmail = (email) => horariosAPI.get(`/horario/profesor/email`, { params: { email } });
 export const getHorarioProfesorByDay = (id, diaSemana) => horariosAPI.get(`/horario/profesor/${id}/dia/${diaSemana}`);
+export const getHorarioProfesorDia = (email, fecha) => horariosAPI.get(`/horario/profesor/email/${encodeURIComponent(email)}/fecha/${fecha}`);
 export const getGuardiaByDayAndHour = (diaSemana, hora) => horariosAPI.get(`/horario/guardia/dia/${diaSemana}/hora/${hora}`);
 
 // Profesores (Horarios Backend)
 export const getProfesoresByNombre = (nombreParcial = '') => horariosAPI.get('/profesores/buscar-nombres', { params: { nombreParcial } });
 export const getProfesorEmailByNombre = (nombre) => horariosAPI.get('/profesores/email-by-nombre', { params: { nombre } });
-export const getProfesorByEmailHorarios = (email) => horariosAPI.get(`/profesores/email/${email}`);
+export const getProfesorByEmailHorarios = (email) => horariosAPI.get(`/profesores/email/${encodeURIComponent(email)}`);
 export const activarProfesor = (id) => horariosAPI.post(`/profesores/activar/${id}`);
 export const desactivarProfesor = (id) => horariosAPI.post(`/profesores/desactivar/${id}`);
 export const incrementarGuardiaNormal = (id) => horariosAPI.post(`/profesores/incrementar-guardia-normal/${id}`);
@@ -184,10 +186,7 @@ guardiasAPI.interceptors.response.use(
   (response) => response,
   (error) => {
     console.error('Error en API Guardias:', error);
-    if (error.response?.status === 401) {
-      // Manejar error de autenticación si es necesario
-      console.warn('No autorizado en API Guardias');
-    }
+    // Solo manejar errores de red, no validar emails aquí
     return Promise.reject(error);
   }
 );
@@ -197,10 +196,7 @@ horariosAPI.interceptors.response.use(
   (response) => response,
   (error) => {
     console.error('Error en API Horarios:', error);
-    if (error.response?.status === 401) {
-      // Manejar error de autenticación si es necesario
-      console.warn('No autorizado en API Horarios');
-    }
+    // Solo manejar errores de red, no validar emails aquí
     return Promise.reject(error);
   }
 );
@@ -233,6 +229,7 @@ export const horariosService = {
   getHorarioByIdProfesor,
   getHorarioByProfesorEmail,
   getHorarioProfesorByDay,
+  getHorarioProfesorDia,
   getGuardiaByDayAndHour,
   getProfesoresByNombre,
   getProfesorEmailByNombre,

@@ -17,7 +17,7 @@
               id="email"
               v-model="email"
               type="email"
-              :placeholder="`usuario@${userStore.devAllowedDomain}`"
+              placeholder="usuario@example.com"
               :disabled="loading"
               required
             />
