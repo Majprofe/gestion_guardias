@@ -54,7 +54,7 @@
                                     {{ profesor.email }}
                                 </option>
                             </select>
-                            <button @click="asignarCoberturaHandler(falta.id, index)" class="btn btn-primary">Asignar Profesor
+                            <button @click="asignarCobertura(falta.id, index)" class="btn btn-primary">Asignar Profesor
                             </button>
                         </template>
                     </td>
@@ -74,14 +74,7 @@
 </template>
 <script setup>
 import { ref, onMounted } from "vue";
-import { 
-  getProfesoresByNombre, 
-  getProfesorEmailByNombre, 
-  getAusenciasHistorico, 
-  getGuardiaByDayAndHour,
-  deleteCoberturaByAusencia,
-  asignarCobertura
-} from '@/services/apiService'
+import axios from "axios";
 import { useToast } from "vue-toastification";
 
 const toast = useToast();
@@ -104,7 +97,7 @@ const profesoresFiltrados = ref([]); // Filtrados por lo que escribe el usuario
 // Cargar todos los nombres
 const cargarTodosLosNombres = async () => {
     try {
-        const response = await getProfesoresByNombre();
+        const response = await axios.get("http://localhost:8080/profesores/buscar-nombres?nombreParcial=");
         profesores.value = response.data;
         profesoresFiltrados.value = response.data;
     } catch (error) {
@@ -129,7 +122,9 @@ const obtenerEmailYFiltrar = async () => {
 
     try {
         if (nombreProfesorSeleccionado.value) {
-            const response = await getProfesorEmailByNombre(nombreProfesorSeleccionado.value);
+            const response = await axios.get("http://localhost:8080/profesores/email-by-nombre", {
+                params: { nombre: nombreProfesorSeleccionado.value }
+            });
             emailProfesor.value = response.data;
         } else {
             emailProfesor.value = "";
@@ -163,7 +158,7 @@ const filtrarPorProfesor = () => {
 // Cargar todas las ausencias históricas
 const mostrarTodas = async () => {
     try {
-        const response = await getAusenciasHistorico();
+        const response = await axios.get("http://localhost:8081/api/ausencias/historico");
         const datos = [];
 
         for (const [fecha, horas] of Object.entries(response.data)) {
@@ -191,7 +186,7 @@ const mostrarTodas = async () => {
 };
 
 // Asignar cobertura
-const asignarCoberturaHandler = async (ausenciaId, index) => {
+const asignarCobertura = async (ausenciaId, index) => {
     const profesorEmail = profesorSeleccionado.value[index];
     if (!profesorEmail) {
         toast.error("Por favor, selecciona un profesor para la cobertura.");
@@ -199,7 +194,7 @@ const asignarCoberturaHandler = async (ausenciaId, index) => {
     }
 
     try {
-        await asignarCobertura(ausenciaId, profesorEmail);
+        await axios.post(`http://localhost:8081/api/coberturas/asignarCobertura/${ausenciaId}/${profesorEmail}`);
         toast.success("Profesor de guardia asignado exitosamente.");
         await mostrarTodas();
     } catch (error) {
@@ -215,11 +210,13 @@ const eliminarCobertura = async (ausenciaId, index, diaSemana, hora) => {
     }
 
     try {
-        await deleteCoberturaByAusencia(ausenciaId);
+        await axios.delete(`http://localhost:8081/api/coberturas/ausencia/${ausenciaId}`);
         historico.value[index].profesorCubre = null;
         profesorSeleccionado.value[index] = '';
 
-        const response = await getGuardiaByDayAndHour(diaSemana, hora);
+        const response = await axios.get(
+            `http://localhost:8080/horario/guardia/dia/${diaSemana}/hora/${hora}`
+        );
         profesoresPorAusencia.value[ausenciaId] = response.data.profesores;
 
         toast.success("Profesor que cubre eliminado. Ahora puedes asignar otro.");

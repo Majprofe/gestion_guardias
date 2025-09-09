@@ -141,6 +141,6 @@ public class GlobalExceptionHandler {
                 .build();
 
         logger.warn("Resource not found: {}", ex.getMessage());
-        return ResponseEntity.notFound().build();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
     }
 }

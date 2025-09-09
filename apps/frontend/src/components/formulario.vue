@@ -56,20 +56,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, nextTick } from "vue";
+import { ref, onMounted } from "vue";
+import axios from "axios";
 import { useToast } from "vue-toastification";
-import { useUserStore } from '@/stores/user';
-import { 
-    getProfesorByEmailHorarios,
-    getHorarioProfesorByDay,
-    getGuardiaByDayAndHour,
-    incrementarGuardiaNormal,
-    incrementarGuardiaProblematica,
-    createAusenciaMultiple
-} from '@/services/apiService';
 
 const toast = useToast();
-const userStore = useUserStore();
+const API_URL = import.meta.env.VITE_API_URL;
 
 const correo = ref("");
 const fecha = ref("");
@@ -79,32 +71,13 @@ const horasClase = ref([]);
 const errorFecha = ref(false);
 const cargando = ref(false);
 
-onMounted(async () => {
+onMounted(() => {
     const hoy = new Date();
     const year = hoy.getFullYear();
     const month = String(hoy.getMonth() + 1).padStart(2, "0");
     const day = String(hoy.getDate()).padStart(2, "0");
     fechaMinima.value = `${year}-${month}-${day}`;
-    
-    // Asegurar que el email esté disponible - usar el getter reactivo
-    await nextTick();
-    correo.value = userStore.getUserEmail || localStorage.getItem("userEmail") || "";
-    
-    // Si ya hay fecha y día completo seleccionados, cargar las horas
-    if (fecha.value && diaCompleto.value !== "" && correo.value) {
-        cargarHorasDelDia();
-    }
-});
-
-// Watch para detectar cuando el email esté disponible - usar el getter reactivo
-watch(() => userStore.getUserEmail, (newEmail) => {
-    if (newEmail && !correo.value) {
-        correo.value = newEmail;
-        // Si ya hay fecha y día completo seleccionados, cargar las horas automáticamente
-        if (fecha.value && diaCompleto.value !== "") {
-            cargarHorasDelDia();
-        }
-    }
+    correo.value = localStorage.getItem("userEmail") || "";
 });
 
 const seleccionarDiaCompleto = valor => {
@@ -123,29 +96,13 @@ const cargarHorasDelDia = async () => {
 
     if (!fecha.value || diaCompleto.value === "") return;
 
-    // Validar que el email esté disponible
-    if (!correo.value) {
-        console.warn('📧 Email no disponible, reintentando en el siguiente ciclo...');
-        // Reintentar después de un pequeño delay
-        setTimeout(() => {
-            if (userStore.getUserEmail && !correo.value) {
-                correo.value = userStore.getUserEmail;
-                cargarHorasDelDia();
-            }
-        }, 100);
-        return;
-    }
-
     try {
-        console.log('🔍 Cargando horario para:', correo.value);
-        
-        const profesorResponse = await getProfesorByEmailHorarios(correo.value);
-        console.log('👤 Respuesta profesor:', profesorResponse.data);
-        
+        const profesorResponse = await axios.get(`${API}/profesores/email/${correo.value}`);
         const id = profesorResponse.data.id;
+
         const diaSemana = dia === 0 ? 7 : dia;
 
-        const horarioResponse = await getHorarioProfesorByDay(id, diaSemana);
+        const horarioResponse = await axios.get(`${API}/horario/profesor/${id}/dia/${diaSemana}`);
         const actividades = horarioResponse.data.actividades || [];
 
         horasClase.value = actividades.map(hora => ({
@@ -158,7 +115,6 @@ const cargarHorasDelDia = async () => {
             descripcion: ""
         }));
     } catch (error) {
-        console.error('Error cargando horario:', error);
         toast.error("Error al cargar el horario del día.");
     }
 };
@@ -177,49 +133,46 @@ const registrarFalta = async () => {
 
     try {
         cargando.value = true;
-        
-        // Preparar datos para el endpoint múltiple
-        const ausenciaMultipleDTO = {
-            profesorAusenteEmail: correo.value,
-            fecha: fecha.value,
-            horas: horasSeleccionadas.map(hora => ({
-                hora: parseInt(hora.valor),
-                grupo: hora.grupo,
-                aula: hora.aula,
-                tarea: hora.descripcion.trim() || "No especificada"
-            }))
-        };
-        
-        console.log('Enviando ausencia múltiple:', ausenciaMultipleDTO);
-        console.log('JSON que se enviará:', JSON.stringify(ausenciaMultipleDTO, null, 2));
-        
-        // Crear ausencias múltiples en una sola petición
-        const response = await createAusenciaMultiple(ausenciaMultipleDTO);
-        
-        if (response?.data && Array.isArray(response.data)) {
-            toast.success(`✅ ${response.data.length} ausencias registradas correctamente`);
-            
-            // Actualizar contadores de profesores de guardia (opcional, ya que el backend lo maneja)
-            // Se puede omitir si el backend actualiza automáticamente
-            for (const ausencia of response.data) {
-                try {
-                    if (ausencia.profesorEnGuardiaId) {
-                        // Determinar si es grupo conflictivo
-                        const horaOriginal = horasSeleccionadas.find(h => h.valor === ausencia.hora);
-                        const esConflictivo = horaOriginal?.grupo?.esProblematico === true || horaOriginal?.grupo?.esProblematico === 1;
-                        
-                        // Incrementar contador correspondiente
-                        if (esConflictivo) {
-                            await incrementarGuardiaProblematica(ausencia.profesorEnGuardiaId);
-                        } else {
-                            await incrementarGuardiaNormal(ausencia.profesorEnGuardiaId);
-                        }
-                    }
-                } catch (error) {
-                    console.warn('Error actualizando contadores:', error);
-                    // No mostramos error al usuario ya que las ausencias se guardaron correctamente
-                }
+        for (const h of horasSeleccionadas) {
+            const guardiaURL = `${API}/horario/guardia/dia/${diaSemana}/hora/${h.valor}`;
+            const guardiaResp = await axios.get(guardiaURL);
+            const profesores = guardiaResp.data.profesores || [];
+
+            if (profesores.length === 0) {
+                toast.warning(`No hay profesores en guardia para la hora ${h.valor}`);
+                continue;
             }
+
+            // Determinar si es grupo conflictivo
+            const esConflictivo = h.grupo?.esProblematico === true || h.grupo?.esProblematico === 1;
+
+            // Selección basada en tipo de grupo
+            const profesorSeleccionado = profesores.reduce((menor, actual) => {
+                const metricaMenor = esConflictivo ? menor.guardiasProblematicas : menor.guardiasRealizadas;
+                const metricaActual = esConflictivo ? actual.guardiasProblematicas : actual.guardiasRealizadas;
+                return metricaActual < metricaMenor ? actual : menor;
+            });
+
+            const ausenciaDTO = {
+                profesorAusenteEmail: correo.value,
+                fecha: fecha.value,
+                hora: parseInt(h.valor),
+                tarea: h.descripcion || "No especificada",
+                profesorEnGuardiaEmail: profesorSeleccionado.email,
+                grupo: h.grupo,
+                aula: h.aula
+            };
+
+            // Guardar la ausencia
+            await axios.post("http://localhost:8081/api/ausencias", ausenciaDTO, {
+                headers: { "Content-Type": "application/json" }
+            });
+
+            // Actualizar contador según tipo de grupo
+            const endpoint = esConflictivo
+                ? "incrementar-guardia-problematica"
+                : "incrementar-guardia-normal";
+            await axios.post(`${API}/profesores/${endpoint}/${profesorSeleccionado.id}`);
         }
 
         toast.success("Ausencia registrada correctamente");
@@ -228,28 +181,13 @@ const registrarFalta = async () => {
             limpiarFormulario();
             window.location.href = "/";
         }, 2000);
-        
     } catch (error) {
-        console.error('Error registrando ausencias:', error);
-        console.error('Detalles del error:', {
-            status: error.response?.status,
-            data: error.response?.data,
-            message: error.message
-        });
-        
-        if (error.response?.status === 409) {
-            toast.error('❌ Ya existe una ausencia para alguna de las horas seleccionadas');
-        } else if (error.response?.status === 400) {
-            toast.error('❌ Datos inválidos: ' + (error.response?.data?.message || 'Verifica los datos enviados'));
-        } else if (error.response?.status === 500) {
-            toast.error('❌ Error interno del servidor. Contacta con el administrador.');
-        } else {
-            toast.error('❌ Error registrando las ausencias. Inténtalo de nuevo.');
-        }
+        toast.error(`Error al registrar la ausencia.`);
     } finally {
         cargando.value = false;
     }
 };
+
 
 const limpiarFormulario = () => {
     fecha.value = "";
@@ -418,6 +356,7 @@ button {
     font-style: italic;
     margin-left: 5%;
 }
+
 
 @keyframes spin {
     to {

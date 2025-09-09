@@ -3,16 +3,16 @@
     <header class="header">
       <div class="user-info">
         <img src="../assets/logo.jpg" alt="Logo" class="logo" />
-        <span class="usuario" v-if="nombreUsuario">{{ nombreUsuario }}</span>
+        <span class="usuario" v-if="userName">{{ userName }}</span>
+        <span v-if="isAdmin" class="admin-badge">ADMIN</span>
       </div>
-      <button class="logout" @click="logout" title="Cerrar sesión">
+      <button class="logout" @click="handleLogout" title="Cerrar sesión">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">
           <path fill="currentColor"
             d="M10 16l5-4-5-4v3H3v2h7v3zm9-11h-7V3h7c1.1 0 2 .9 2 2v14c0 1.1-.9 2-2 2h-7v-2h7V5z" />
         </svg>
       </button>
     </header>
-
 
     <nav class="menu">
       <router-link to="/" class="link" title="Inicio">
@@ -27,17 +27,13 @@
         <img class="link-icon" src="../assets/tablon.png" alt="Tablón de Faltas" />
         <span class="link-title">Tablón</span>
       </router-link>
+      <router-link v-if="isAdmin" to="/admin" class="link" title="Panel Admin">
+        <img class="link-icon" src="../assets/historico.png" alt="Panel Admin" />
+        <span class="link-title">Admin</span>
+      </router-link>
       <router-link v-if="isAdmin" to="/historico" class="link" title="Histórico">
         <img class="link-icon" src="../assets/historico.png" alt="Histórico" />
         <span class="link-title">Histórico</span>
-      </router-link>
-      <router-link v-if="isAdmin" to="/estadisticas" class="link" title="Estadísticas">
-        <div class="link-icon emoji-icon">📊</div>
-        <span class="link-title">Estadísticas</span>
-      </router-link>
-      <router-link v-if="isAdmin" to="/admin" class="link" title="Admin Panel">
-        <div class="link-icon emoji-icon">🛠️</div>
-        <span class="link-title">Admin</span>
       </router-link>
       <router-link to="/mis-guardias" class="link" title="Guardias">
         <img class="link-icon" src="../assets/cobertura.png" alt="Mis Guardias" />
@@ -52,43 +48,27 @@
 </template>
 
 <script setup>
-import { onMounted, computed } from "vue";
+import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { supabase } from "@/supabaseClient";
-import { useUserStore } from "@/stores/user";
+import { useAuth } from "@/composables/useAuth";
+import { useToast } from "vue-toastification";
 
 const route = useRoute();
 const router = useRouter();
-const userStore = useUserStore();
+const toast = useToast();
+const { userName, isAdmin, logout } = useAuth();
 
-const nombreUsuario = computed(() => userStore.nombreUsuario);
-const isAdmin = computed(() => userStore.isAdmin);
-const isLoginPage = computed(() => route.name === "login");
+const isLoginPage = computed(() => route.name === "login" || route.name === "auth-callback");
 
-const logout = async () => {
-  const { error } = await supabase.auth.signOut();
-  if (error) {
-    console.error("Error al cerrar sesión:", error.message);
-  } else {
-    userStore.resetUser();
+const handleLogout = async () => {
+  const success = await logout();
+  if (success) {
+    toast.success("Sesión cerrada correctamente");
     router.push("/login");
+  } else {
+    toast.error("Error al cerrar sesión");
   }
 };
-
-onMounted(async () => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session?.user) {
-    userStore.setUser(session.user.email);
-  }
-
-  supabase.auth.onAuthStateChange((_, session) => {
-    if (session?.user) {
-      userStore.setUser(session.user.email);
-    } else {
-      userStore.resetUser();
-    }
-  });
-});
 </script>
 
 
@@ -142,10 +122,21 @@ onMounted(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 80%;
+  max-width: 60%;
   text-transform: uppercase;
   color: white;
   font-size: 12px;
+}
+
+.admin-badge {
+  background-color: #ff6b35;
+  color: white;
+  font-size: 8px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .logout {
@@ -276,15 +267,6 @@ onMounted(async () => {
     height: 24px;
   }
 
-  .emoji-icon {
-    width: 24px !important;
-    height: 24px !important;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-  }
-
   .link-title {
     font-size: 10px;
   }
@@ -326,12 +308,6 @@ onMounted(async () => {
   .link-icon {
     width: 32px;
     height: 32px;
-  }
-
-  .emoji-icon {
-    width: 32px !important;
-    height: 32px !important;
-    font-size: 24px;
   }
 
   .link-title {

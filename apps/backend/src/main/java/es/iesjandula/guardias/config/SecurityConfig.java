@@ -24,20 +24,13 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .authorizeHttpRequests(authz -> authz
-                .requestMatchers("/**").permitAll()
                 .anyRequest().permitAll()
             )
             .csrf(csrf -> csrf.disable())
             .httpBasic(httpBasic -> httpBasic.disable())
             .formLogin(form -> form.disable())
-            .logout(logout -> logout.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .headers(headers -> headers.frameOptions().disable())
-            .securityContext(context -> context.disable())
-            .requestCache(cache -> cache.disable())
-            .anonymous(anonymous -> anonymous.disable())
-            .rememberMe(rememberMe -> rememberMe.disable());
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()));
             
         return http.build();
     }

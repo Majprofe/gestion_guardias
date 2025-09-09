@@ -86,22 +86,20 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { getAusenciasByProfesor, getCoberturasByProfesor } from '@/services/apiService'
+import axios from 'axios'
 import { useToast } from 'vue-toastification'
-import { useUserStore } from '@/stores/user'
 
 const toast = useToast()
-const userStore = useUserStore()
 const misAusencias = ref([])
 const misCoberturas = ref([])
 const vista = ref('coberturas')
-const email = computed(() => userStore.getUserEmail)
+const email = localStorage.getItem('userEmail')
 
 const cargarDatos = async () => {
   try {
     const [ausRes, cobRes] = await Promise.all([
-      getAusenciasByProfesor(email.value),
-      getCoberturasByProfesor(email.value)
+      axios.get(`http://localhost:8081/api/ausencias/por-profesor/${encodeURIComponent(email)}`),
+      axios.get(`http://localhost:8081/api/coberturas/profesor/${encodeURIComponent(email)}`)
     ])
     misAusencias.value = ausRes.data || []
     misCoberturas.value = Array.isArray(cobRes.data) ? cobRes.data : []

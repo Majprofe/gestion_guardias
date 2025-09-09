@@ -32,7 +32,7 @@
 
 
 <script setup>
-import { getHorarioByProfesorEmail } from '@/services/apiService'
+import axios from 'axios'
 import { ref, watch } from 'vue'
 import { useUserStore } from "@/stores/user"
 import { useToast } from "vue-toastification"
@@ -45,26 +45,19 @@ const profesorNombre = ref('')
 const horarioTransformado = ref({})
 
 watch(
-    () => userStore.getUserEmail, // Usar email en lugar de nombre
+    () => userStore.nombreUsuario,
     async (email) => {
-        if (email && email !== "Sin usuario" && email !== "") {
+        if (email && email !== "Sin usuario") {
             try {
-                console.log('🔍 Cargando horario para email:', email);
-                
-                const response = await getHorarioByProfesorEmail(email);
-                
+                const response = await axios.get(`http://localhost:8080/horario/profesor/email?email=${email}`)
                 profesorNombre.value = response.data.profesorNombre
                 horario.value = response.data.horario
                 transformarHorario()
-                
-                console.log('✅ Horario cargado correctamente');
             } catch (error) {
-                console.error("Error al cargar el horario:", error);
                 toast.error("Error al cargar el horario del profesor.")
-                // Comentamos la redirección automática para debugging
-                // setTimeout(() => {
-                //     window.location.href = "/";
-                // }, 4000);
+                setTimeout(() => {
+                    window.location.href = "/";
+                }, 4000);
             }
         }
     },
@@ -72,8 +65,6 @@ watch(
 )
 
 function transformarHorario() {
-    if (!horario.value) return;
-    
     const nuevoHorario = {}
 
     const diasSemana = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes']

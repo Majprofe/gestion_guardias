@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import { useUserStore } from '@/stores/user';
+import { supabase } from '@/supabaseClient';
 import HomeView from '@/views/homeView.vue';
 import HistoricoView from '@/views/historicoView.vue';
 import GestionFaltas from '@/views/gestionFaltasView.vue';
@@ -7,173 +7,101 @@ import FormularioView from '@/views/formularioView.vue';
 import LoginView from '@/views/loginView.vue';
 import MisGuardiasView from "@/views/misGuardiasView.vue";
 import horarioView from '@/views/horarioView.vue';
-import AuthCallbackView from '@/views/authCallbackView.vue';
-import EstadisticasView from '@/views/estadisticasView.vue';
-import AdminPanelView from '@/views/adminPanelView.vue';
+import adminPanelView from '@/views/adminPanelView.vue';
+import NotFoundView from '@/views/NotFoundView.vue';
+import authCallbackView from '@/views/authCallbackView.vue';
+import estadisticasView from '@/views/estadisticasView.vue';
+import usuariosView from '@/views/usuariosView.vue';
 
 const routes = [
-  { 
-    path: '/', 
-    name: "home", 
-    component: HomeView, 
-    meta: { 
-      requiresAuth: true,
-      title: '🏠 Inicio - Sistema de Gestión de Guardias'
-    } 
-  },
-  { 
-    path: '/historico', 
-    name: "historico", 
-    component: HistoricoView, 
-    meta: { 
-      requiresAuth: true, 
-      adminOnly: true,
-      title: '📈 Histórico de Guardias'
-    } 
-  },
-  { 
-    path: '/gestion-faltas', 
-    name: "gestion-faltas", 
-    component: GestionFaltas, 
-    meta: { 
-      requiresAuth: true,
-      title: '📋 Gestión de Faltas'
-    } 
-  },
-  { 
-    path: '/formulario', 
-    name: "formulario", 
-    component: FormularioView, 
-    meta: { 
-      requiresAuth: true,
-      title: '📝 Solicitar Ausencia'
-    } 
-  },
-  { 
-    path: '/mis-guardias', 
-    name: "MisGuardias", 
-    component: MisGuardiasView, 
-    meta: { 
-      requiresAuth: true,
-      title: '🛡️ Mis Guardias'
-    } 
-  },
-  { 
-    path: '/login', 
-    name: "login", 
-    component: LoginView,
-    meta: {
-      title: '🔐 Iniciar Sesión'
-    }
-  },
-  { 
-    path: '/horario', 
-    name: "horario", 
-    component: horarioView, 
-    meta: { 
-      requiresAuth: true,
-      title: '📅 Mi Horario'
-    } 
-  },
-  { 
-    path: '/estadisticas', 
-    name: "estadisticas", 
-    component: EstadisticasView, 
-    meta: { 
-      requiresAuth: true, 
-      adminOnly: true,
-      title: '📊 Dashboard de Estadísticas'
-    } 
-  },
-  { 
-    path: '/admin', 
-    name: "admin-panel", 
-    component: AdminPanelView, 
-    meta: { 
-      requiresAuth: true, 
-      adminOnly: true,
-      title: '🛠️ Panel de Administración'
-    } 
-  },
-  { 
-    path: '/auth/callback', 
-    name: "auth-callback", 
-    component: AuthCallbackView,
-    meta: {
-      title: '🔄 Verificando autenticación...'
-    }
-  },
-  // Ruta de captura para 404
-  {
-    path: '/:pathMatch(.*)*',
-    name: 'NotFound',
-    component: () => import('@/views/NotFoundView.vue'),
-    meta: { 
-      requiresAuth: false,
-      title: '❌ Página no encontrada'
-    }
-  }
+  // Rutas públicas
+  { path: '/login', name: "login", component: LoginView },
+  { path: '/auth/callback', name: "auth-callback", component: authCallbackView },
+  
+  // Rutas para profesores (requieren autenticación)
+  { path: '/', name: "home", component: HomeView, meta: { requiresAuth: true } },
+  { path: '/formulario', name: "formulario", component: FormularioView, meta: { requiresAuth: true } },
+  { path: '/mis-guardias', name: "MisGuardias", component: MisGuardiasView, meta: { requiresAuth: true } },
+  { path: '/horario', name: "horario", component: horarioView, meta: { requiresAuth: true } },
+  { path: '/gestion-faltas', name: "gestion-faltas", component: GestionFaltas, meta: { requiresAuth: true } },
+  
+  // Rutas para administradores (requieren rol admin)
+  { path: '/admin', name: "admin-panel", component: adminPanelView, meta: { requiresAuth: true, adminOnly: true } },
+  { path: '/historico', name: "historico", component: HistoricoView, meta: { requiresAuth: true, adminOnly: true } },
+  { path: '/estadisticas', name: "estadisticas", component: estadisticasView, meta: { requiresAuth: true, adminOnly: true } },
+  { path: '/usuarios', name: "usuarios", component: usuariosView, meta: { requiresAuth: true, adminOnly: true } },
+  
+  // Ruta de error 404
+  { path: '/:pathMatch(.*)*', name: "NotFound", component: NotFoundView },
 ];
 
 const router = createRouter({
   history: createWebHistory(),
   routes,
-  scrollBehavior(to, from, savedPosition) {
-    // Siempre scroll al top al cambiar de página
-    if (savedPosition) {
-      return savedPosition
-    } else {
-      return { top: 0 }
-    }
-  }
 });
 
 router.beforeEach(async (to, from, next) => {
-  const userStore = useUserStore();
+  const { data: { session } } = await supabase.auth.getSession();
+  const isAuthenticated = !!session;
   
-  // Actualizar título de la página
-  if (to.meta.title) {
-    document.title = to.meta.title
-  }
-  
-  // Inicializar autenticación si no se ha hecho
-  if (!userStore.loading) {
-    await userStore.initializeAuth();
-  }
-
-  const isAuthenticated = userStore.isAuthenticated;
-  const isAdmin = userStore.getIsAdmin;
-
-  // Permitir acceso a la página de callback sin verificaciones adicionales
-  if (to.path === '/auth/callback') {
-    return next();
-  }
-
-  // Redirigir al login si no tiene sesión y la ruta requiere autenticación
+  // Si no está autenticado y la ruta requiere autenticación
   if (to.meta.requiresAuth && !isAuthenticated) {
     return next('/login');
   }
 
-  // Redirigir a la página de inicio si ya está autenticado y se intenta acceder a login
+  // Si está autenticado y intenta acceder al login, redirigir según su rol
   if (to.path === '/login' && isAuthenticated) {
-    return next('/');
+    const userRole = localStorage.getItem("userRole");
+    if (userRole === 'admin') {
+      return next('/admin');
+    } else {
+      return next('/');
+    }
   }
 
-  // Verificar si la ruta requiere rol de admin y si el usuario no es admin
-  if (to.meta.adminOnly && !isAdmin) {
-    console.warn('Acceso denegado: se requieren permisos de administrador')
-    return next('/'); // Redirigir a la página de inicio
+  // Si la ruta requiere autenticación, verificar validez del usuario
+  if (to.meta.requiresAuth && isAuthenticated) {
+    const userRole = localStorage.getItem("userRole");
+    const userEmail = localStorage.getItem("userEmail");
+    
+    // Si no hay información de rol en localStorage, intentar obtenerla de la base de datos
+    if (!userRole && session?.user?.email) {
+      try {
+        const { data: userData, error } = await supabase
+          .from("usuarios")
+          .select("rol, nombre, activo")
+          .eq("email", session.user.email)
+          .eq("activo", true)
+          .single();
+
+        if (userData) {
+          // Actualizar localStorage con la información del usuario
+          localStorage.setItem("userRole", userData.rol);
+          localStorage.setItem("userName", userData.nombre);
+          localStorage.setItem("userEmail", session.user.email);
+          
+          // Verificar si la ruta requiere admin
+          if (to.meta.adminOnly && userData.rol !== 'admin') {
+            return next('/');
+          }
+        } else {
+          // Usuario no válido, cerrar sesión y redirigir al login
+          await supabase.auth.signOut();
+          localStorage.clear();
+          return next('/login');
+        }
+      } catch (error) {
+        console.error("Error verificando usuario:", error);
+        return next('/login');
+      }
+    } else if (to.meta.adminOnly && userRole !== 'admin') {
+      // Verificar si la ruta requiere admin y el usuario no es admin
+      return next('/');
+    }
   }
 
-  next(); // Permitir la navegación si pasa todas las verificaciones
+  next(); // Permitir la navegación
 });
 
-// Guard de navegación después de cada ruta
-router.afterEach((to, from) => {
-  // Log de navegación para debugging
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`Navegando de ${from.name || 'desconocido'} a ${to.name || 'desconocido'}`)
-  }
-});
 
 export default router;

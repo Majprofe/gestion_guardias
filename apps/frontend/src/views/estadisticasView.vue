@@ -1,146 +1,150 @@
 <template>
   <div class="estadisticas-container">
-    <h1>📊 Dashboard de Estadísticas</h1>
-    
-    <!-- Métricas Generales -->
-    <div class="metricas-grid">
-      <div class="metrica-card">
-        <div class="metrica-icon">👥</div>
-        <div class="metrica-info">
-          <h3>{{ totalProfesores }}</h3>
-          <p>Profesores Activos</p>
-        </div>
-      </div>
-      
-      <div class="metrica-card">
-        <div class="metrica-icon">📋</div>
-        <div class="metrica-info">
-          <h3>{{ totalGuardias }}</h3>
-          <p>Guardias Realizadas</p>
-        </div>
-      </div>
-      
-      <div class="metrica-card">
-        <div class="metrica-icon">⚠️</div>
-        <div class="metrica-info">
-          <h3>{{ totalProblematicas }}</h3>
-          <p>Guardias Problemáticas</p>
-        </div>
-      </div>
-      
-      <div class="metrica-card">
-        <div class="metrica-icon">🎯</div>
-        <div class="metrica-info">
-          <h3>{{ totalConvivencia }}</h3>
-          <p>Aula Convivencia</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Dashboard de Equidad -->
-    <div class="dashboard-section">
-      <h2>⚖️ Dashboard de Equidad</h2>
-      <div class="filtros-dashboard">
-        <select v-model="filtroTipo" @change="actualizarGraficos">
-          <option value="total">Total de Guardias</option>
-          <option value="normales">Guardias Normales</option>
-          <option value="problematicas">Guardias Problemáticas</option>
-          <option value="convivencia">Aula de Convivencia</option>
+    <div class="estadisticas-header">
+      <h1>📊 Estadísticas del Sistema</h1>
+      <div class="header-actions">
+        <select v-model="selectedPeriod" @change="loadData" class="period-selector">
+          <option value="week">Esta semana</option>
+          <option value="month">Este mes</option>
+          <option value="quarter">Este trimestre</option>
+          <option value="year">Este año</option>
         </select>
-      </div>
-      
-      <div class="grafico-container">
-        <canvas ref="graficoEquidad" width="800" height="400"></canvas>
+        <button @click="refreshData" class="refresh-btn" :disabled="loading">
+          <span v-if="loading">🔄</span>
+          <span v-else>↻</span>
+          Actualizar
+        </button>
       </div>
     </div>
 
-    <!-- Reporte de Desbalance -->
-    <div class="dashboard-section">
-      <h2>📈 Reporte de Desbalance</h2>
-      <div class="tabla-desbalance">
-        <table v-if="reporteDesbalance.length">
+    <!-- Tarjetas de resumen -->
+    <div class="stats-summary">
+      <div class="stat-card">
+        <div class="stat-icon">📋</div>
+        <div class="stat-content">
+          <h3>{{ stats.totalAusencias }}</h3>
+          <p>Ausencias Totales</p>
+          <span class="stat-change" :class="stats.ausenciasChange >= 0 ? 'positive' : 'negative'">
+            {{ stats.ausenciasChange >= 0 ? '+' : '' }}{{ stats.ausenciasChange }}%
+          </span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">👥</div>
+        <div class="stat-content">
+          <h3>{{ stats.totalGuardias }}</h3>
+          <p>Guardias Realizadas</p>
+          <span class="stat-change" :class="stats.guardiasChange >= 0 ? 'positive' : 'negative'">
+            {{ stats.guardiasChange >= 0 ? '+' : '' }}{{ stats.guardiasChange }}%
+          </span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">🏫</div>
+        <div class="stat-content">
+          <h3>{{ stats.profesoresActivos }}</h3>
+          <p>Profesores Activos</p>
+          <span class="stat-change positive">
+            {{ stats.profesoresNuevos }} nuevos
+          </span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">⏱️</div>
+        <div class="stat-content">
+          <h3>{{ stats.horasCobertura }}</h3>
+          <p>Horas de Cobertura</p>
+          <span class="stat-change" :class="stats.coberturaChange >= 0 ? 'positive' : 'negative'">
+            {{ stats.coberturaChange >= 0 ? '+' : '' }}{{ stats.coberturaChange }}%
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gráficos -->
+    <div class="charts-section">
+      <div class="chart-container">
+        <h2>📈 Ausencias por Mes</h2>
+        <div class="chart-placeholder">
+          <div class="bar-chart">
+            <div v-for="(month, index) in chartData.months" :key="index" class="bar-item">
+              <div class="bar" :style="{ height: `${(month.value / chartData.maxValue) * 100}%` }"></div>
+              <span class="bar-label">{{ month.name }}</span>
+              <span class="bar-value">{{ month.value }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="chart-container">
+        <h2>🥧 Tipos de Ausencia</h2>
+        <div class="chart-placeholder">
+          <div class="pie-chart">
+            <div class="pie-legend">
+              <div v-for="(tipo, index) in chartData.tiposAusencia" :key="index" class="legend-item">
+                <span class="legend-color" :style="{ backgroundColor: tipo.color }"></span>
+                <span class="legend-label">{{ tipo.name }}</span>
+                <span class="legend-value">{{ tipo.value }}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabla de profesores más activos -->
+    <div class="top-profesores-section">
+      <h2>🏆 Profesores con Más Guardias</h2>
+      <div class="table-container">
+        <table class="profesores-table">
           <thead>
             <tr>
+              <th>Posición</th>
               <th>Profesor</th>
-              <th>Guardias Normales</th>
-              <th>Guardias Problemáticas</th>
-              <th>Aula Convivencia</th>
-              <th>Total</th>
-              <th>Estado</th>
+              <th>Guardias</th>
+              <th>Horas</th>
+              <th>Porcentaje</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="profesor in reporteDesbalance" :key="profesor.profesorEmail" 
-                :class="getEstadoClass(profesor)">
-              <td>{{ emailAcortado(profesor.profesorEmail) }}</td>
-              <td>{{ profesor.guardiasNormales }}</td>
-              <td>{{ profesor.guardiasProblematicas }}</td>
-              <td>{{ profesor.guardiasConvivencia }}</td>
-              <td><strong>{{ profesor.totalGuardias }}</strong></td>
+            <tr v-for="(profesor, index) in topProfesores" :key="index" :class="{ 'highlight': index < 3 }">
               <td>
-                <span :class="'badge ' + getEstadoBadge(profesor)">
-                  {{ getEstadoTexto(profesor) }}
+                <span class="position" :class="`position-${index + 1}`">
+                  {{ index + 1 }}
+                  <span v-if="index === 0">🥇</span>
+                  <span v-else-if="index === 1">🥈</span>
+                  <span v-else-if="index === 2">🥉</span>
                 </span>
+              </td>
+              <td class="profesor-name">{{ profesor.nombre }}</td>
+              <td class="guardias-count">{{ profesor.guardias }}</td>
+              <td class="horas-count">{{ profesor.horas }}h</td>
+              <td>
+                <div class="progress-bar">
+                  <div class="progress-fill" :style="{ width: `${profesor.porcentaje}%` }"></div>
+                  <span class="progress-text">{{ profesor.porcentaje }}%</span>
+                </div>
               </td>
             </tr>
           </tbody>
         </table>
-        <p v-else>Cargando reporte de desbalance...</p>
       </div>
     </div>
 
-    <!-- Estadísticas por Día y Hora -->
-    <div class="dashboard-section">
-      <h2>📅 Distribución por Día y Hora</h2>
-      <div class="filtros-dia-hora">
-        <select v-model="diaSeleccionado" @change="cargarEstadisticasDiaHora">
-          <option value="">Todos los días</option>
-          <option value="LUNES">Lunes</option>
-          <option value="MARTES">Martes</option>
-          <option value="MIERCOLES">Miércoles</option>
-          <option value="JUEVES">Jueves</option>
-          <option value="VIERNES">Viernes</option>
-        </select>
-        
-        <select v-model="horaSeleccionada" @change="cargarEstadisticasDiaHora">
-          <option value="">Todas las horas</option>
-          <option v-for="hora in 6" :key="hora" :value="hora">
-            {{ hora }}ª Hora
-          </option>
-        </select>
-      </div>
-      
-      <div class="grid-dia-hora" v-if="estadisticasDiaHora.length">
-        <div v-for="estadistica in estadisticasDiaHora" :key="estadistica.id" 
-             class="card-dia-hora">
-          <h4>{{ emailAcortado(estadistica.profesorEmail) }}</h4>
-          <p>{{ estadistica.diaSemana }} - {{ estadistica.hora }}ª</p>
-          <div class="contadores-mini">
-            <span>N: {{ estadistica.guardiasNormales }}</span>
-            <span>P: {{ estadistica.guardiasProblematicas }}</span>
-            <span>C: {{ estadistica.guardiasConvivencia }}</span>
+    <!-- Alertas y notificaciones -->
+    <div class="alerts-section" v-if="alerts.length > 0">
+      <h2>⚠️ Alertas del Sistema</h2>
+      <div class="alerts-container">
+        <div v-for="(alert, index) in alerts" :key="index" class="alert-item" :class="alert.type">
+          <div class="alert-icon">{{ alert.icon }}</div>
+          <div class="alert-content">
+            <h4>{{ alert.title }}</h4>
+            <p>{{ alert.message }}</p>
           </div>
-        </div>
-      </div>
-      <p v-else-if="diaSeleccionado || horaSeleccionada">
-        No hay datos para los filtros seleccionados
-      </p>
-    </div>
-
-    <!-- Alertas del Sistema -->
-    <div class="dashboard-section" v-if="alertas.length">
-      <h2>🚨 Alertas del Sistema</h2>
-      <div class="alertas-container">
-        <div v-for="alerta in alertas" :key="alerta.id" 
-             :class="'alerta ' + alerta.tipo">
-          <div class="alerta-icon">
-            {{ alerta.tipo === 'warning' ? '⚠️' : alerta.tipo === 'error' ? '❌' : 'ℹ️' }}
-          </div>
-          <div class="alerta-content">
-            <h4>{{ alerta.titulo }}</h4>
-            <p>{{ alerta.mensaje }}</p>
-            <small>{{ formatearFecha(alerta.fecha) }}</small>
-          </div>
+          <button @click="dismissAlert(index)" class="alert-dismiss">×</button>
         </div>
       </div>
     </div>
@@ -148,518 +152,510 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
-import { useToast } from 'vue-toastification'
-import { 
-  getDashboardEquidad, 
-  getReporteDesbalance, 
-  getContadoresPorDiaHora,
-  getContadoresProfesor
-} from '@/services/apiService'
+import { ref, onMounted } from 'vue';
+import { useToast } from 'vue-toastification';
+import { supabase } from '@/supabaseClient';
 
-const toast = useToast()
+const toast = useToast();
 
 // Estados reactivos
-const totalProfesores = ref(0)
-const totalGuardias = ref(0)
-const totalProblematicas = ref(0)
-const totalConvivencia = ref(0)
-const dashboardEquidad = ref({})
-const reporteDesbalance = ref([])
-const estadisticasDiaHora = ref([])
-const alertas = ref([])
+const loading = ref(false);
+const selectedPeriod = ref('month');
 
-// Filtros
-const filtroTipo = ref('total')
-const diaSeleccionado = ref('')
-const horaSeleccionada = ref('')
+// Datos de estadísticas
+const stats = ref({
+  totalAusencias: 156,
+  ausenciasChange: 12,
+  totalGuardias: 89,
+  guardiasChange: -5,
+  profesoresActivos: 34,
+  profesoresNuevos: 2,
+  horasCobertura: 267,
+  coberturaChange: 8
+});
 
-// Referencias
-const graficoEquidad = ref(null)
+// Datos para gráficos
+const chartData = ref({
+  months: [
+    { name: 'Ene', value: 23 },
+    { name: 'Feb', value: 34 },
+    { name: 'Mar', value: 28 },
+    { name: 'Abr', value: 45 },
+    { name: 'May', value: 38 },
+    { name: 'Jun', value: 52 }
+  ],
+  maxValue: 52,
+  tiposAusencia: [
+    { name: 'Enfermedad', value: 35, color: '#FF6B6B' },
+    { name: 'Personal', value: 25, color: '#4ECDC4' },
+    { name: 'Formación', value: 20, color: '#45B7D1' },
+    { name: 'Otros', value: 20, color: '#96CEB4' }
+  ]
+});
 
-// Cargar datos al montar
-onMounted(async () => {
-  await Promise.all([
-    cargarDashboardEquidad(),
-    cargarReporteDesbalance(),
-    cargarEstadisticasDiaHora(),
-    generarAlertas()
-  ])
-  
-  // Dar tiempo a que se monte el canvas
-  setTimeout(() => {
-    actualizarGraficos()
-  }, 100)
-})
+// Top profesores
+const topProfesores = ref([
+  { nombre: 'María García López', guardias: 45, horas: 67, porcentaje: 100 },
+  { nombre: 'Juan Martín Pérez', guardias: 38, horas: 57, porcentaje: 84 },
+  { nombre: 'Ana Rodríguez Silva', guardias: 34, horas: 51, porcentaje: 76 },
+  { nombre: 'Carlos Fernández', guardias: 29, horas: 43, porcentaje: 64 },
+  { nombre: 'Laura Sánchez', guardias: 25, horas: 38, porcentaje: 56 },
+  { nombre: 'Miguel Torres', guardias: 22, horas: 33, porcentaje: 49 },
+  { nombre: 'Elena Ruiz', guardias: 18, horas: 27, porcentaje: 40 }
+]);
 
-// Métodos para cargar datos
-const cargarDashboardEquidad = async () => {
+// Alertas del sistema
+const alerts = ref([
+  {
+    type: 'warning',
+    icon: '⚠️',
+    title: 'Alto número de ausencias',
+    message: 'Se ha detectado un incremento del 15% en las ausencias esta semana.'
+  },
+  {
+    type: 'info',
+    icon: 'ℹ️',
+    title: 'Actualización disponible',
+    message: 'Hay una nueva versión del sistema disponible para instalar.'
+  }
+]);
+
+// Métodos
+const loadData = async () => {
+  loading.value = true;
   try {
-    const response = await getDashboardEquidad()
-    dashboardEquidad.value = response.data
+    // Aquí podrías cargar datos reales desde la API
+    // Por ahora usamos datos de ejemplo
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Simular carga
     
-    // Actualizar métricas generales
-    totalProfesores.value = dashboardEquidad.value.totalProfesores || 0
-    totalGuardias.value = dashboardEquidad.value.totalGuardias || 0
-    totalProblematicas.value = dashboardEquidad.value.totalProblematicas || 0
-    totalConvivencia.value = dashboardEquidad.value.totalConvivencia || 0
+    toast.success(`Datos actualizados para ${selectedPeriod.value}`);
   } catch (error) {
-    console.error('Error cargando dashboard de equidad:', error)
-    toast.error('Error al cargar estadísticas generales')
+    toast.error('Error al cargar los datos');
+    console.error('Error:', error);
+  } finally {
+    loading.value = false;
   }
-}
+};
 
-const cargarReporteDesbalance = async () => {
-  try {
-    const response = await getReporteDesbalance()
-    reporteDesbalance.value = response.data || []
-  } catch (error) {
-    console.error('Error cargando reporte de desbalance:', error)
-    toast.error('Error al cargar reporte de desbalance')
-  }
-}
+const refreshData = () => {
+  loadData();
+};
 
-const cargarEstadisticasDiaHora = async () => {
-  try {
-    if (!diaSeleccionado.value && !horaSeleccionada.value) {
-      estadisticasDiaHora.value = []
-      return
-    }
-    
-    const response = await getContadoresPorDiaHora(diaSeleccionado.value, horaSeleccionada.value)
-    estadisticasDiaHora.value = response.data || []
-  } catch (error) {
-    console.error('Error cargando estadísticas día/hora:', error)
-    toast.error('Error al cargar estadísticas por día y hora')
-  }
-}
+const dismissAlert = (index) => {
+  alerts.value.splice(index, 1);
+};
 
-const generarAlertas = async () => {
-  // Generar alertas basadas en los datos
-  const alertasGeneradas = []
-  
-  // Alerta de desbalance extremo
-  const profesoresDesbalanceados = reporteDesbalance.value.filter(p => 
-    Math.abs(p.totalGuardias - (totalGuardias.value / totalProfesores.value)) > 3
-  )
-  
-  if (profesoresDesbalanceados.length > 0) {
-    alertasGeneradas.push({
-      id: 'desbalance-extremo',
-      tipo: 'warning',
-      titulo: 'Desbalance Detectado',
-      mensaje: `${profesoresDesbalanceados.length} profesores tienen una carga muy desigual de guardias`,
-      fecha: new Date()
-    })
-  }
-  
-  // Alerta de baja cobertura
-  if (totalGuardias.value < totalProfesores.value * 2) {
-    alertasGeneradas.push({
-      id: 'baja-cobertura',
-      tipo: 'info',
-      titulo: 'Cobertura Baja',
-      mensaje: 'El promedio de guardias por profesor es bajo. Considere redistribuir.',
-      fecha: new Date()
-    })
-  }
-  
-  alertas.value = alertasGeneradas
-}
-
-// Métodos de gráficos
-const actualizarGraficos = () => {
-  if (!graficoEquidad.value) return
-  
-  const ctx = graficoEquidad.value.getContext('2d')
-  const data = reporteDesbalance.value
-  
-  if (!data.length) return
-  
-  // Limpiar canvas
-  ctx.clearRect(0, 0, 800, 400)
-  
-  // Configuración del gráfico
-  const padding = 60
-  const chartWidth = 800 - 2 * padding
-  const chartHeight = 400 - 2 * padding
-  
-  // Obtener datos según filtro
-  const valores = data.map(p => {
-    switch (filtroTipo.value) {
-      case 'normales': return p.guardiasNormales
-      case 'problematicas': return p.guardiasProblematicas
-      case 'convivencia': return p.guardiasConvivencia
-      default: return p.totalGuardias
-    }
-  })
-  
-  const maxValor = Math.max(...valores, 1)
-  const labels = data.map(p => p.profesorEmail.split('@')[0].substring(0, 8))
-  
-  // Dibujar ejes
-  ctx.strokeStyle = '#666'
-  ctx.lineWidth = 1
-  
-  // Eje Y
-  ctx.beginPath()
-  ctx.moveTo(padding, padding)
-  ctx.lineTo(padding, padding + chartHeight)
-  ctx.stroke()
-  
-  // Eje X
-  ctx.beginPath()
-  ctx.moveTo(padding, padding + chartHeight)
-  ctx.lineTo(padding + chartWidth, padding + chartHeight)
-  ctx.stroke()
-  
-  // Dibujar barras
-  const barWidth = chartWidth / data.length * 0.8
-  const barSpacing = chartWidth / data.length * 0.2
-  
-  valores.forEach((valor, index) => {
-    const barHeight = (valor / maxValor) * chartHeight
-    const x = padding + index * (barWidth + barSpacing) + barSpacing / 2
-    const y = padding + chartHeight - barHeight
-    
-    // Color según el valor
-    const ratio = valor / maxValor
-    ctx.fillStyle = ratio > 0.8 ? '#ff4757' : ratio > 0.5 ? '#ffa502' : '#2ed573'
-    
-    ctx.fillRect(x, y, barWidth, barHeight)
-    
-    // Etiqueta del valor
-    ctx.fillStyle = '#333'
-    ctx.font = '12px Arial'
-    ctx.textAlign = 'center'
-    ctx.fillText(valor.toString(), x + barWidth / 2, y - 5)
-    
-    // Etiqueta del profesor
-    ctx.save()
-    ctx.translate(x + barWidth / 2, padding + chartHeight + 15)
-    ctx.rotate(-Math.PI / 4)
-    ctx.textAlign = 'right'
-    ctx.fillText(labels[index], 0, 0)
-    ctx.restore()
-  })
-  
-  // Título del gráfico
-  ctx.fillStyle = '#333'
-  ctx.font = 'bold 16px Arial'
-  ctx.textAlign = 'center'
-  ctx.fillText(`Distribución de ${filtroTipo.value}`, 400, 30)
-  
-  // Línea de promedio
-  const promedio = valores.reduce((a, b) => a + b, 0) / valores.length
-  const promedioY = padding + chartHeight - (promedio / maxValor) * chartHeight
-  
-  ctx.strokeStyle = '#ff6b6b'
-  ctx.lineWidth = 2
-  ctx.setLineDash([5, 5])
-  ctx.beginPath()
-  ctx.moveTo(padding, promedioY)
-  ctx.lineTo(padding + chartWidth, promedioY)
-  ctx.stroke()
-  ctx.setLineDash([])
-  
-  // Etiqueta del promedio
-  ctx.fillStyle = '#ff6b6b'
-  ctx.font = '12px Arial'
-  ctx.textAlign = 'left'
-  ctx.fillText(`Promedio: ${promedio.toFixed(1)}`, padding + 10, promedioY - 5)
-}
-
-// Métodos auxiliares
-const emailAcortado = (email) => {
-  if (!email) return 'N/A'
-  const index = email.indexOf('@')
-  return index > 0 ? email.substring(0, index) : email.substring(0, 10)
-}
-
-const getEstadoClass = (profesor) => {
-  const promedio = totalGuardias.value / totalProfesores.value
-  const diferencia = Math.abs(profesor.totalGuardias - promedio)
-  
-  if (diferencia > 3) return 'desbalance-alto'
-  if (diferencia > 1.5) return 'desbalance-medio'
-  return 'equilibrado'
-}
-
-const getEstadoBadge = (profesor) => {
-  const promedio = totalGuardias.value / totalProfesores.value
-  const diferencia = Math.abs(profesor.totalGuardias - promedio)
-  
-  if (diferencia > 3) return 'badge-danger'
-  if (diferencia > 1.5) return 'badge-warning'
-  return 'badge-success'
-}
-
-const getEstadoTexto = (profesor) => {
-  const promedio = totalGuardias.value / totalProfesores.value
-  const diferencia = Math.abs(profesor.totalGuardias - promedio)
-  
-  if (diferencia > 3) return 'Desbalanceado'
-  if (diferencia > 1.5) return 'Moderado'
-  return 'Equilibrado'
-}
-
-const formatearFecha = (fecha) => {
-  return new Intl.DateTimeFormat('es-ES', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(new Date(fecha))
-}
+// Inicialización
+onMounted(() => {
+  loadData();
+});
 </script>
 
 <style scoped>
 .estadisticas-container {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 20px;
   font-family: 'Montserrat', sans-serif;
 }
 
-.metricas-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
-}
-
-.metrica-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 20px;
-  border-radius: 12px;
+.estadisticas-header {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  margin-bottom: 30px;
+  flex-wrap: wrap;
+  gap: 20px;
 }
 
-.metrica-icon {
-  font-size: 2.5em;
-  margin-right: 15px;
-}
-
-.metrica-info h3 {
-  font-size: 2em;
+.estadisticas-header h1 {
+  color: #1F86A1;
+  font-size: 2.5rem;
   margin: 0;
   font-weight: 600;
 }
 
-.metrica-info p {
-  margin: 5px 0 0 0;
-  opacity: 0.9;
-}
-
-.dashboard-section {
-  background: white;
-  border-radius: 12px;
-  padding: 25px;
-  margin-bottom: 25px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-}
-
-.dashboard-section h2 {
-  margin-top: 0;
-  color: #333;
-  border-bottom: 2px solid #f0f0f0;
-  padding-bottom: 10px;
-}
-
-.filtros-dashboard, .filtros-dia-hora {
+.header-actions {
   display: flex;
   gap: 15px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
+  align-items: center;
 }
 
-.filtros-dashboard select, .filtros-dia-hora select {
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  background: white;
-  min-width: 150px;
-}
-
-.grafico-container {
-  text-align: center;
-  margin: 20px 0;
-}
-
-.grafico-container canvas {
-  border: 1px solid #eee;
+.period-selector {
+  padding: 10px 15px;
+  border: 2px solid #dee2e6;
   border-radius: 8px;
-  max-width: 100%;
-  height: auto;
-}
-
-.tabla-desbalance {
-  overflow-x: auto;
-}
-
-.tabla-desbalance table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 15px;
-}
-
-.tabla-desbalance th,
-.tabla-desbalance td {
-  padding: 12px;
-  text-align: left;
-  border-bottom: 1px solid #eee;
-}
-
-.tabla-desbalance th {
-  background: #f8f9fa;
-  font-weight: 600;
-  color: #333;
-}
-
-.equilibrado {
-  background-color: rgba(46, 213, 115, 0.1);
-}
-
-.desbalance-medio {
-  background-color: rgba(255, 165, 2, 0.1);
-}
-
-.desbalance-alto {
-  background-color: rgba(255, 71, 87, 0.1);
-}
-
-.badge {
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.badge-success {
-  background: #2ed573;
-  color: white;
-}
-
-.badge-warning {
-  background: #ffa502;
-  color: white;
-}
-
-.badge-danger {
-  background: #ff4757;
-  color: white;
-}
-
-.grid-dia-hora {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 15px;
-  margin-top: 15px;
-}
-
-.card-dia-hora {
-  background: #f8f9fa;
-  padding: 15px;
-  border-radius: 8px;
-  border-left: 4px solid #667eea;
-}
-
-.card-dia-hora h4 {
-  margin: 0 0 5px 0;
-  color: #333;
-}
-
-.card-dia-hora p {
-  margin: 0 0 10px 0;
-  color: #666;
   font-size: 14px;
+  background: white;
+  cursor: pointer;
 }
 
-.contadores-mini {
-  display: flex;
-  gap: 10px;
-}
-
-.contadores-mini span {
-  background: #667eea;
+.refresh-btn {
+  padding: 10px 20px;
+  background: linear-gradient(90deg, #1F86A1, #4DB8D0);
   color: white;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.alertas-container {
+.refresh-btn:hover:not(:disabled) {
+  background: linear-gradient(90deg, #197a90, #3fa7be);
+}
+
+.refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.stats-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-bottom: 40px;
+}
+
+.stat-card {
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  transition: transform 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+}
+
+.stat-icon {
+  font-size: 3rem;
+  padding: 15px;
+  background: linear-gradient(135deg, #1F86A1, #4DB8D0);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-content h3 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #333;
+  margin: 0 0 5px 0;
+}
+
+.stat-content p {
+  color: #666;
+  margin: 0 0 10px 0;
+  font-weight: 500;
+}
+
+.stat-change {
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.stat-change.positive {
+  background: #d4edda;
+  color: #155724;
+}
+
+.stat-change.negative {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.charts-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 30px;
+  margin-bottom: 40px;
+}
+
+.chart-container {
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.chart-container h2 {
+  color: #333;
+  margin-bottom: 20px;
+  font-size: 1.3rem;
+}
+
+.bar-chart {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  height: 200px;
+  padding: 20px 0;
+}
+
+.bar-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.bar {
+  width: 100%;
+  background: linear-gradient(to top, #1F86A1, #4DB8D0);
+  border-radius: 4px 4px 0 0;
+  transition: all 0.3s ease;
+  min-height: 10px;
+}
+
+.bar:hover {
+  filter: brightness(1.1);
+}
+
+.bar-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+}
+
+.bar-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.pie-legend {
   display: flex;
   flex-direction: column;
   gap: 15px;
 }
 
-.alerta {
+.legend-item {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  gap: 12px;
+}
+
+.legend-color {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+}
+
+.legend-label {
+  flex: 1;
+  font-weight: 500;
+  color: #333;
+}
+
+.legend-value {
+  font-weight: 600;
+  color: #1F86A1;
+}
+
+.top-profesores-section {
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  margin-bottom: 40px;
+}
+
+.top-profesores-section h2 {
+  color: #333;
+  margin-bottom: 20px;
+  font-size: 1.3rem;
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+.profesores-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.profesores-table th {
+  background: #f8f9fa;
+  padding: 15px;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.profesores-table td {
+  padding: 15px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.profesores-table tr.highlight {
+  background: #f8fffe;
+}
+
+.position {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.position-1 { color: #FFD700; }
+.position-2 { color: #C0C0C0; }
+.position-3 { color: #CD7F32; }
+
+.profesor-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.guardias-count, .horas-count {
+  font-weight: 600;
+  color: #1F86A1;
+}
+
+.progress-bar {
+  position: relative;
+  background: #e9ecef;
+  border-radius: 10px;
+  height: 20px;
+  min-width: 100px;
+}
+
+.progress-fill {
+  background: linear-gradient(90deg, #1F86A1, #4DB8D0);
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+.alerts-section {
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.alerts-section h2 {
+  color: #333;
+  margin-bottom: 20px;
+  font-size: 1.3rem;
+}
+
+.alerts-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.alert-item {
+  display: flex;
+  align-items: center;
   gap: 15px;
   padding: 15px;
   border-radius: 8px;
   border-left: 4px solid;
 }
 
-.alerta.warning {
-  background: rgba(255, 165, 2, 0.1);
-  border-left-color: #ffa502;
+.alert-item.warning {
+  background: #fff3cd;
+  border-left-color: #ffc107;
 }
 
-.alerta.error {
-  background: rgba(255, 71, 87, 0.1);
-  border-left-color: #ff4757;
+.alert-item.info {
+  background: #d1ecf1;
+  border-left-color: #17a2b8;
 }
 
-.alerta.info {
-  background: rgba(102, 126, 234, 0.1);
-  border-left-color: #667eea;
+.alert-icon {
+  font-size: 1.5rem;
 }
 
-.alerta-icon {
-  font-size: 1.5em;
-  flex-shrink: 0;
+.alert-content {
+  flex: 1;
 }
 
-.alerta-content h4 {
+.alert-content h4 {
   margin: 0 0 5px 0;
   color: #333;
 }
 
-.alerta-content p {
-  margin: 0 0 5px 0;
+.alert-content p {
+  margin: 0;
   color: #666;
 }
 
-.alerta-content small {
+.alert-dismiss {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
   color: #999;
-  font-size: 12px;
+  padding: 5px;
 }
 
+.alert-dismiss:hover {
+  color: #666;
+}
+
+/* Responsive */
 @media (max-width: 768px) {
-  .metricas-grid {
-    grid-template-columns: 1fr;
+  .estadisticas-container {
+    padding: 15px;
   }
-  
-  .filtros-dashboard, .filtros-dia-hora {
+
+  .estadisticas-header {
     flex-direction: column;
+    align-items: stretch;
   }
-  
-  .grafico-container canvas {
-    width: 100%;
-    height: 300px;
+
+  .estadisticas-header h1 {
+    font-size: 2rem;
+    text-align: center;
   }
-  
-  .grid-dia-hora {
+
+  .header-actions {
+    justify-content: center;
+  }
+
+  .stats-summary {
     grid-template-columns: 1fr;
+  }
+
+  .charts-section {
+    grid-template-columns: 1fr;
+  }
+
+  .profesores-table {
+    font-size: 14px;
+  }
+
+  .profesores-table th,
+  .profesores-table td {
+    padding: 10px;
   }
 }
 </style>

@@ -2,13 +2,12 @@ import { createApp } from "vue";
 import { createPinia } from "pinia";
 import App from "./App.vue";
 import router from "./router";
-import { useUserStore } from "./stores/user";
+import { useAuth } from "@/composables/useAuth";
 
 import Toast, { POSITION } from "vue-toastification";
 import "vue-toastification/dist/index.css";
 
 const app = createApp(App);
-const pinia = createPinia();
 
 // Configuración opcional del toast
 const options = {
@@ -23,12 +22,12 @@ const options = {
   icon: true,
 };
 
-app.use(pinia);
 app.use(router);
+app.use(createPinia());
 app.use(Toast, options); 
 
-// Inicializar autenticación después de crear la app
-const userStore = useUserStore();
-userStore.initializeAuth();
-
-app.mount("#app");
+// Inicializar autenticación antes de montar la aplicación
+const { initializeAuth } = useAuth();
+initializeAuth().then(() => {
+  app.mount("#app");
+});

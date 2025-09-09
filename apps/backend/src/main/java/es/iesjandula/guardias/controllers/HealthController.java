@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -29,6 +30,15 @@ public class HealthController {
         response.put("service", "guardias-backend");
         response.put("version", "1.0.0");
         return response;
+    }
+
+    @GetMapping("/simple")
+    @Operation(summary = "Test simple", description = "Endpoint simple para verificar que el backend responde")
+    public ResponseEntity<Map<String, String>> simple() {
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "Backend funcionando correctamente");
+        response.put("status", "OK");
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/info")

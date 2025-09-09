@@ -1,1214 +1,512 @@
 <template>
-  <div class="admin-panel-container">
-    <h1>🛠️ Panel de Administración Avanzado</h1>
-    
-    <!-- Tabs de navegación -->
-    <div class="tabs-container">
-      <button 
-        v-for="tab in tabs" 
-        :key="tab.id"
-        :class="['tab-button', { active: activeTab === tab.id }]"
-        @click="activeTab = tab.id"
-      >
-        {{ tab.icon }} {{ tab.name }}
-      </button>
+  <div class="admin-panel">
+    <div class="admin-header">
+      <h1>Panel de Administración</h1>
+      <p class="admin-welcome">Bienvenido {{ userName }}, tienes permisos de administrador</p>
     </div>
 
-    <!-- Gestión de Coberturas -->
-    <div v-if="activeTab === 'coberturas'" class="tab-content">
-      <div class="section-header">
-        <h2>📋 Gestión de Coberturas</h2>
-        <div class="filtros-avanzados">
-          <input 
-            v-model="filtros.fecha" 
-            type="date" 
-            placeholder="Filtrar por fecha"
-            @change="cargarCoberturas"
-          />
-          <select v-model="filtros.estado" @change="cargarCoberturas">
-            <option value="">Todos los estados</option>
-            <option value="ASIGNADA">Asignada</option>
-            <option value="VALIDADA">Validada</option>
-            <option value="COMPLETADA">Completada</option>
-          </select>
-          <button @click="redistribuirDia" class="btn btn-warning" :disabled="!filtros.fecha">
-            🔄 Redistribuir Día
-          </button>
+    <div class="admin-grid">
+      <!-- Gestión de Usuarios -->
+      <div class="admin-card">
+        <div class="card-header">
+          <h2>👥 Gestión de Usuarios</h2>
+        </div>
+        <div class="card-content">
+          <p>Administra los usuarios del sistema, roles y permisos</p>
+          <div class="card-actions">
+            <button @click="navigateTo('/usuarios')" class="btn-primary">
+              Ver Usuarios
+            </button>
+            <button @click="refreshUsers" class="btn-secondary">
+              Sincronizar
+            </button>
+          </div>
         </div>
       </div>
 
-      <div class="coberturas-grid">
-        <div v-for="cobertura in coberturasFiltered" :key="cobertura.id" class="cobertura-card">
-          <div class="cobertura-header">
-            <span class="cobertura-fecha">{{ formatearFecha(cobertura.fecha) }}</span>
-            <span :class="'estado-badge ' + cobertura.estado.toLowerCase()">
-              {{ cobertura.estado }}
-            </span>
-          </div>
-          
-          <div class="cobertura-body">
-            <div class="cobertura-info">
-              <p><strong>📍 Aula:</strong> {{ cobertura.aula }}</p>
-              <p><strong>👥 Grupo:</strong> {{ cobertura.grupo }}</p>
-              <p><strong>🕒 Hora:</strong> {{ cobertura.hora }}ª</p>
-              <p><strong>👨‍🏫 Profesor:</strong> {{ emailAcortado(cobertura.profesorEmail) }}</p>
-              <p><strong>📝 Tarea:</strong> {{ cobertura.tarea || 'Sin tarea específica' }}</p>
-            </div>
-            
-            <div class="cobertura-actions">
-              <button 
-                @click="cambiarProfesorCobertura(cobertura)" 
-                class="btn btn-sm btn-primary"
-                :disabled="cobertura.estado === 'COMPLETADA'"
-              >
-                👥 Cambiar Profesor
-              </button>
-              
-              <button 
-                @click="validarCobertura(cobertura)" 
-                class="btn btn-sm btn-success"
-                v-if="cobertura.estado === 'ASIGNADA'"
-              >
-                ✅ Validar
-              </button>
-              
-              <button 
-                @click="eliminarCobertura(cobertura)" 
-                class="btn btn-sm btn-danger"
-                :disabled="cobertura.estado === 'COMPLETADA'"
-              >
-                🗑️ Eliminar
-              </button>
-            </div>
-          </div>
-          
-          <!-- Archivos adjuntos si los hay -->
-          <div v-if="cobertura.archivos && cobertura.archivos.length" class="cobertura-archivos">
-            <h5>📎 Archivos adjuntos:</h5>
-            <div class="archivos-lista-mini">
-              <a 
-                v-for="archivo in cobertura.archivos" 
-                :key="archivo.id"
-                @click="descargarArchivo(archivo.id)"
-                class="archivo-link"
-              >
-                {{ getFileIcon(archivo.nombreOriginal) }} {{ archivo.nombreOriginal }}
-              </a>
-            </div>
+      <!-- Histórico de Ausencias -->
+      <div class="admin-card">
+        <div class="card-header">
+          <h2>📊 Histórico de Ausencias</h2>
+        </div>
+        <div class="card-content">
+          <p>Consulta el histórico completo de ausencias y guardias</p>
+          <div class="card-actions">
+            <button @click="navigateTo('/historico')" class="btn-primary">
+              Ver Histórico
+            </button>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Asignación Manual -->
-    <div v-if="activeTab === 'asignacion'" class="tab-content">
-      <div class="section-header">
-        <h2>🎯 Asignación Manual de Guardias</h2>
-      </div>
-      
-      <div class="asignacion-manual">
-        <div class="asignacion-form">
-          <div class="form-row">
-            <div class="form-group">
-              <label>📅 Fecha:</label>
-              <input v-model="asignacionManual.fecha" type="date" required />
-            </div>
-            
-            <div class="form-group">
-              <label>🕒 Hora:</label>
-              <select v-model="asignacionManual.hora" required>
-                <option value="">Seleccionar hora</option>
-                <option v-for="hora in 6" :key="hora" :value="hora">{{ hora }}ª Hora</option>
-              </select>
-            </div>
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group">
-              <label>👨‍🏫 Profesor Ausente:</label>
-              <select v-model="asignacionManual.profesorAusenteEmail">
-                <option value="">Seleccionar profesor</option>
-                <option v-for="profesor in profesoresList" :key="profesor.email" :value="profesor.email">
-                  {{ profesor.nombre }} ({{ profesor.email }})
-                </option>
-              </select>
-            </div>
-            
-            <div class="form-group">
-              <label>👥 Grupo:</label>
-              <input v-model="asignacionManual.grupo" placeholder="Ej: 1ºDAM" required />
-            </div>
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group">
-              <label>📍 Aula:</label>
-              <input v-model="asignacionManual.aula" placeholder="Ej: A01" required />
-            </div>
-            
-            <div class="form-group">
-              <label>⚠️ ¿Grupo problemático?</label>
-              <label class="checkbox-label">
-                <input type="checkbox" v-model="asignacionManual.esProblematico" />
-                <span class="checkmark"></span>
-                Sí
-              </label>
-            </div>
-          </div>
-          
-          <div class="form-group">
-            <label>📝 Tarea:</label>
-            <textarea v-model="asignacionManual.tarea" placeholder="Descripción de la tarea..."></textarea>
-          </div>
-          
-          <button @click="crearAsignacionManual" class="btn btn-primary" :disabled="!validarAsignacionManual()">
-            ➕ Crear Asignación Manual
-          </button>
+      <!-- Estadísticas -->
+      <div class="admin-card">
+        <div class="card-header">
+          <h2>📈 Estadísticas</h2>
         </div>
-        
-        <!-- Profesores disponibles para esa hora -->
-        <div class="profesores-disponibles" v-if="profesoresDisponibles.length">
-          <h3>👥 Profesores Disponibles</h3>
-          <p class="disponibles-hint">
-            Profesores de guardia en {{ asignacionManual.fecha }} a las {{ asignacionManual.hora }}ª hora:
-          </p>
-          
-          <div class="profesores-grid">
-            <div 
-              v-for="profesor in profesoresDisponibles" 
-              :key="profesor.email"
-              :class="['profesor-card', { selected: asignacionManual.profesorGuardiaEmail === profesor.email }]"
-              @click="asignacionManual.profesorGuardiaEmail = profesor.email"
-            >
-              <div class="profesor-info">
-                <h4>{{ emailAcortado(profesor.email) }}</h4>
-                <p>{{ profesor.nombre }}</p>
-              </div>
-              
-              <div class="profesor-stats">
-                <div class="stat">
-                  <span class="stat-label">Normal:</span>
-                  <span class="stat-value">{{ profesor.guardiasNormales || 0 }}</span>
-                </div>
-                <div class="stat">
-                  <span class="stat-label">Problemáticas:</span>
-                  <span class="stat-value">{{ profesor.guardiasProblematicas || 0 }}</span>
-                </div>
-                <div class="stat">
-                  <span class="stat-label">Convivencia:</span>
-                  <span class="stat-value">{{ profesor.guardiasConvivencia || 0 }}</span>
-                </div>
-              </div>
+        <div class="card-content">
+          <p>Análisis y reportes del sistema de guardias</p>
+          <div class="card-actions">
+            <button @click="navigateTo('/estadisticas')" class="btn-primary">
+              Ver Estadísticas
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Configuración del Sistema -->
+      <div class="admin-card">
+        <div class="card-header">
+          <h2>⚙️ Configuración</h2>
+        </div>
+        <div class="card-content">
+          <p>Configuración general del sistema</p>
+          <div class="card-actions">
+            <button @click="openConfigModal" class="btn-primary">
+              Configurar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Estado del Sistema -->
+      <div class="admin-card">
+        <div class="card-header">
+          <h2>🔍 Estado del Sistema</h2>
+        </div>
+        <div class="card-content">
+          <div class="system-status">
+            <div class="status-item">
+              <span class="status-label">API Backend:</span>
+              <span :class="['status-indicator', backendStatus]">
+                {{ backendStatus === 'online' ? 'Online' : 'Offline' }}
+              </span>
             </div>
+            <div class="status-item">
+              <span class="status-label">API Horarios:</span>
+              <span :class="['status-indicator', horariosStatus]">
+                {{ horariosStatus === 'online' ? 'Online' : 'Offline' }}
+              </span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">Base de Datos:</span>
+              <span :class="['status-indicator', dbStatus]">
+                {{ dbStatus === 'online' ? 'Conectada' : 'Desconectada' }}
+              </span>
+            </div>
+          </div>
+          <div class="card-actions">
+            <button @click="checkSystemStatus" class="btn-secondary">
+              Verificar Estado
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Accesos Rápidos -->
+      <div class="admin-card">
+        <div class="card-header">
+          <h2>🚀 Accesos Rápidos</h2>
+        </div>
+        <div class="card-content">
+          <div class="quick-actions">
+            <button @click="navigateTo('/formulario')" class="quick-btn">
+              ➕ Nueva Ausencia
+            </button>
+            <button @click="navigateTo('/gestion-faltas')" class="quick-btn">
+              📋 Tablón de Faltas
+            </button>
+            <button @click="navigateTo('/horario')" class="quick-btn">
+              📅 Ver Horarios
+            </button>
+            <button @click="exportData" class="quick-btn">
+              📥 Exportar Datos
+            </button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Alertas y Monitores -->
-    <div v-if="activeTab === 'alertas'" class="tab-content">
-      <div class="section-header">
-        <h2>🚨 Sistema de Alertas y Monitoreo</h2>
-        <button @click="verificarCobertura" class="btn btn-info">
-          🔍 Verificar Cobertura Actual
-        </button>
-      </div>
-      
-      <div class="alertas-grid">
-        <!-- Alerta de insuficiencia -->
-        <div class="alerta-card error" v-if="alertaInsuficiencia.length">
-          <div class="alerta-header">
-            <h3>❌ Insuficiencia de Profesores</h3>
+    <!-- Modal de Configuración -->
+    <div v-if="showConfigModal" class="modal-overlay" @click="closeConfigModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>Configuración del Sistema</h3>
+          <button @click="closeConfigModal" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="config-section">
+            <label>URL API Backend:</label>
+            <input v-model="config.apiUrl" type="text" />
           </div>
-          <div class="alerta-body">
-            <p>Los siguientes tramos horarios no tienen suficientes profesores de guardia:</p>
-            <ul>
-              <li v-for="tramo in alertaInsuficiencia" :key="tramo.id">
-                <strong>{{ tramo.dia }} - {{ tramo.hora }}ª hora:</strong> 
-                {{ tramo.profesoresDisponibles }} disponibles, {{ tramo.ausenciasTotal }} ausencias
-              </li>
-            </ul>
+          <div class="config-section">
+            <label>URL API Horarios:</label>
+            <input v-model="config.horariosUrl" type="text" />
+          </div>
+          <div class="config-section">
+            <label>Timeout de sesión (minutos):</label>
+            <input v-model="config.sessionTimeout" type="number" />
           </div>
         </div>
-        
-        <!-- Alerta de desbalance extremo -->
-        <div class="alerta-card warning" v-if="alertaDesbalance.length">
-          <div class="alerta-header">
-            <h3>⚖️ Desbalance Extremo</h3>
-          </div>
-          <div class="alerta-body">
-            <p>Profesores con carga muy desigual de guardias:</p>
-            <ul>
-              <li v-for="profesor in alertaDesbalance" :key="profesor.email">
-                <strong>{{ emailAcortado(profesor.email) }}:</strong> 
-                {{ profesor.totalGuardias }} guardias (promedio: {{ promedioGuardias.toFixed(1) }})
-              </li>
-            </ul>
-          </div>
+        <div class="modal-footer">
+          <button @click="saveConfig" class="btn-primary">Guardar</button>
+          <button @click="closeConfigModal" class="btn-secondary">Cancelar</button>
         </div>
-        
-        <!-- Resumen de estado -->
-        <div class="alerta-card success">
-          <div class="alerta-header">
-            <h3>📊 Resumen del Sistema</h3>
-          </div>
-          <div class="alerta-body">
-            <div class="stats-grid">
-              <div class="stat-item">
-                <span class="stat-number">{{ resumenSistema.totalCoberturas }}</span>
-                <span class="stat-label">Coberturas Activas</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-number">{{ resumenSistema.coberturasValidadas }}</span>
-                <span class="stat-label">Validadas</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-number">{{ resumenSistema.profesoresActivos }}</span>
-                <span class="stat-label">Profesores Activos</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-number">{{ resumenSistema.horasSinCobertura }}</span>
-                <span class="stat-label">Horas Sin Cobertura</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Configuración -->
-    <div v-if="activeTab === 'configuracion'" class="tab-content">
-      <div class="section-header">
-        <h2>⚙️ Configuración del Sistema</h2>
-      </div>
-      
-      <div class="configuracion-grid">
-        <div class="config-card">
-          <h3>🔄 Redistribución Automática</h3>
-          <div class="config-options">
-            <label class="checkbox-label">
-              <input type="checkbox" v-model="configuracion.redistribucionAutomatica" />
-              <span class="checkmark"></span>
-              Habilitar redistribución automática al crear ausencias
-            </label>
-            
-            <label class="checkbox-label">
-              <input type="checkbox" v-model="configuracion.notificacionesEmail" />
-              <span class="checkmark"></span>
-              Enviar notificaciones por email a profesores asignados
-            </label>
-          </div>
-        </div>
-        
-        <div class="config-card">
-          <h3>📊 Métricas y Reportes</h3>
-          <div class="config-options">
-            <button @click="exportarDatos('csv')" class="btn btn-outline">
-              📄 Exportar a CSV
-            </button>
-            <button @click="exportarDatos('excel')" class="btn btn-outline">
-              📊 Exportar a Excel
-            </button>
-            <button @click="limpiarDatosAntiguos" class="btn btn-warning">
-              🧹 Limpiar Datos Antiguos
-            </button>
-          </div>
-        </div>
-        
-        <div class="config-card">
-          <h3>🔧 Herramientas de Mantenimiento</h3>
-          <div class="config-options">
-            <button @click="recalcularContadores" class="btn btn-info">
-              🔢 Recalcular Todos los Contadores
-            </button>
-            <button @click="verificarIntegridad" class="btn btn-secondary">
-              🔍 Verificar Integridad de Datos
-            </button>
-            <button @click="reiniciarSistema" class="btn btn-danger">
-              🔄 Reiniciar Sistema
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal para cambio de profesor -->
-  <div v-if="modalCambioProfesor.show" class="modal-overlay" @click="cerrarModalCambio">
-    <div class="modal-content" @click.stop>
-      <div class="modal-header">
-        <h3>👥 Cambiar Profesor de Cobertura</h3>
-        <button @click="cerrarModalCambio" class="btn-close">❌</button>
-      </div>
-      
-      <div class="modal-body">
-        <p>Cobertura actual: <strong>{{ modalCambioProfesor.cobertura?.grupo }}</strong> - {{ modalCambioProfesor.cobertura?.hora }}ª hora</p>
-        <p>Profesor actual: <strong>{{ emailAcortado(modalCambioProfesor.cobertura?.profesorEmail) }}</strong></p>
-        
-        <div class="nuevo-profesor-selection">
-          <label>Seleccionar nuevo profesor:</label>
-          <select v-model="modalCambioProfesor.nuevoProfesorEmail">
-            <option value="">Seleccionar...</option>
-            <option 
-              v-for="profesor in profesoresDisponiblesModal" 
-              :key="profesor.email" 
-              :value="profesor.email"
-            >
-              {{ profesor.nombre }} - Guardias: {{ profesor.totalGuardias || 0 }}
-            </option>
-          </select>
-        </div>
-        
-        <div class="razon-cambio">
-          <label>Razón del cambio (opcional):</label>
-          <textarea v-model="modalCambioProfesor.razon" placeholder="Ej: Solicitud del profesor, mejor capacitación..."></textarea>
-        </div>
-      </div>
-      
-      <div class="modal-footer">
-        <button @click="confirmarCambioProfesor" class="btn btn-primary" :disabled="!modalCambioProfesor.nuevoProfesorEmail">
-          ✅ Confirmar Cambio
-        </button>
-        <button @click="cerrarModalCambio" class="btn btn-secondary">
-          ❌ Cancelar
-        </button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
-import { useToast } from 'vue-toastification'
-import { 
-  getCoberturas,
-  deleteCoberturaByAusencia,
-  asignarCobertura,
-  getProfesoresByNombre,
-  getGuardiaByDayAndHour,
-  getArchivosByAusencia,
-  downloadArchivo,
-  actualizarEstadoCobertura,
-  redistribuirCoberturasDia
-} from '@/services/apiService'
+import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { useAuth } from '@/composables/useAuth';
+import { useToast } from 'vue-toastification';
+import { supabase } from '@/supabaseClient';
 
-const toast = useToast()
+const router = useRouter();
+const toast = useToast();
+const { userName } = useAuth();
 
-// Tabs
-const tabs = [
-  { id: 'coberturas', name: 'Gestión de Coberturas', icon: '📋' },
-  { id: 'asignacion', name: 'Asignación Manual', icon: '🎯' },
-  { id: 'alertas', name: 'Alertas y Monitoreo', icon: '🚨' },
-  { id: 'configuracion', name: 'Configuración', icon: '⚙️' }
-]
+// Estados reactivos
+const backendStatus = ref('checking');
+const horariosStatus = ref('checking');
+const dbStatus = ref('checking');
+const showConfigModal = ref(false);
 
-const activeTab = ref('coberturas')
+// Configuración del sistema
+const config = ref({
+  apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:8081',
+  horariosUrl: 'http://localhost:8082', // Solo para referencia, ya no se usa directamente
+  sessionTimeout: 60
+});
 
-// Estados para coberturas
-const coberturas = ref([])
-const filtros = ref({
-  fecha: '',
-  estado: '',
-  profesor: ''
-})
+// Métodos de navegación
+const navigateTo = (path) => {
+  router.push(path);
+};
 
-// Estados para asignación manual
-const asignacionManual = ref({
-  fecha: '',
-  hora: '',
-  profesorAusenteEmail: '',
-  profesorGuardiaEmail: '',
-  grupo: '',
-  aula: '',
-  tarea: '',
-  esProblematico: false
-})
-
-const profesoresList = ref([])
-const profesoresDisponibles = ref([])
-
-// Estados para alertas
-const alertaInsuficiencia = ref([])
-const alertaDesbalance = ref([])
-const resumenSistema = ref({
-  totalCoberturas: 0,
-  coberturasValidadas: 0,
-  profesoresActivos: 0,
-  horasSinCobertura: 0
-})
-
-// Estados para configuración
-const configuracion = ref({
-  redistribucionAutomatica: true,
-  notificacionesEmail: false
-})
-
-// Modal de cambio de profesor
-const modalCambioProfesor = ref({
-  show: false,
-  cobertura: null,
-  nuevoProfesorEmail: '',
-  razon: ''
-})
-
-const profesoresDisponiblesModal = ref([])
-
-// Computeds
-const coberturasFiltered = computed(() => {
-  let filtered = coberturas.value
-
-  if (filtros.value.fecha) {
-    filtered = filtered.filter(c => c.fecha === filtros.value.fecha)
-  }
+// Verificar estado del sistema
+const checkSystemStatus = async () => {
+  toast.info('Verificando estado del sistema...');
   
-  if (filtros.value.estado) {
-    filtered = filtered.filter(c => c.estado === filtros.value.estado)
-  }
-  
-  return filtered
-})
-
-const promedioGuardias = computed(() => {
-  if (!profesoresList.value.length) return 0
-  const total = profesoresList.value.reduce((sum, p) => sum + (p.totalGuardias || 0), 0)
-  return total / profesoresList.value.length
-})
-
-// Watchers
-watch([() => asignacionManual.value.fecha, () => asignacionManual.value.hora], async () => {
-  if (asignacionManual.value.fecha && asignacionManual.value.hora) {
-    await cargarProfesoresDisponibles()
-  }
-})
-
-// Lifecycle
-onMounted(async () => {
-  await Promise.all([
-    cargarCoberturas(),
-    cargarProfesores(),
-    verificarCobertura()
-  ])
-})
-
-// Métodos principales
-const cargarCoberturas = async () => {
+  // Verificar API Backend principal
   try {
-    const response = await getCoberturas(filtros.value)
-    coberturas.value = response.data || []
+    const response = await fetch(`${config.value.apiUrl}/health`, { 
+      method: 'GET',
+      timeout: 5000 
+    });
+    backendStatus.value = response.ok ? 'online' : 'offline';
+  } catch (error) {
+    backendStatus.value = 'offline';
+  }
+
+  // Verificar API Horarios (a través del proxy)
+  try {
+    const response = await fetch(`${config.value.apiUrl}/api/horarios/health`, { 
+      method: 'GET',
+      timeout: 5000 
+    });
+    horariosStatus.value = response.ok ? 'online' : 'offline';
+  } catch (error) {
+    horariosStatus.value = 'offline';
+  }
+
+  // Verificar Base de Datos (Supabase)
+  try {
+    const { data, error } = await supabase.from('usuarios').select('count').limit(1);
+    dbStatus.value = error ? 'offline' : 'online';
+  } catch (error) {
+    dbStatus.value = 'offline';
+  }
+
+  toast.success('Estado del sistema actualizado');
+};
+
+// Sincronizar usuarios
+const refreshUsers = async () => {
+  try {
+    toast.info('Sincronizando usuarios...');
     
-    // Cargar archivos para cada cobertura
-    for (const cobertura of coberturas.value) {
-      try {
-        const archivosResp = await getArchivosByAusencia(cobertura.ausenciaId)
-        cobertura.archivos = archivosResp.data || []
-      } catch (error) {
-        cobertura.archivos = []
-      }
-    }
-  } catch (error) {
-    console.error('Error cargando coberturas:', error)
-    toast.error('Error al cargar coberturas')
-  }
-}
-
-const cargarProfesores = async () => {
-  try {
-    const response = await getProfesoresByNombre('')
-    profesoresList.value = response.data || []
-  } catch (error) {
-    console.error('Error cargando profesores:', error)
-    toast.error('Error al cargar lista de profesores')
-  }
-}
-
-const cargarProfesoresDisponibles = async () => {
-  if (!asignacionManual.value.fecha || !asignacionManual.value.hora) return
-  
-  try {
-    const fecha = new Date(asignacionManual.value.fecha)
-    const diaSemana = fecha.getDay() === 0 ? 7 : fecha.getDay()
+    // Opción 1: Usar la función SQL directamente
+    const { data: syncResult, error: syncError } = await supabase.rpc('sync_auth_users');
     
-    const response = await getGuardiaByDayAndHour(diaSemana, asignacionManual.value.hora)
-    profesoresDisponibles.value = response.data.profesores || []
-  } catch (error) {
-    console.error('Error cargando profesores disponibles:', error)
-    profesoresDisponibles.value = []
-  }
-}
-
-// Métodos de coberturas
-const cambiarProfesorCobertura = async (cobertura) => {
-  modalCambioProfesor.value.show = true
-  modalCambioProfesor.value.cobertura = cobertura
-  modalCambioProfesor.value.nuevoProfesorEmail = ''
-  modalCambioProfesor.value.razon = ''
-  
-  // Cargar profesores disponibles para esa fecha/hora
-  try {
-    const fecha = new Date(cobertura.fecha)
-    const diaSemana = fecha.getDay() === 0 ? 7 : fecha.getDay()
-    
-    const response = await getGuardiaByDayAndHour(diaSemana, cobertura.hora)
-    profesoresDisponiblesModal.value = response.data.profesores || []
-  } catch (error) {
-    profesoresDisponiblesModal.value = profesoresList.value
-  }
-}
-
-const confirmarCambioProfesor = async () => {
-  try {
-    // Eliminar cobertura actual
-    await deleteCoberturaByAusencia(modalCambioProfesor.value.cobertura.ausenciaId)
-    
-    // Crear nueva cobertura
-    await asignarCobertura({
-      ausenciaId: modalCambioProfesor.value.cobertura.ausenciaId,
-      profesorEmail: modalCambioProfesor.value.nuevoProfesorEmail,
-      observaciones: modalCambioProfesor.value.razon
-    })
-    
-    toast.success('Profesor de cobertura cambiado exitosamente')
-    await cargarCoberturas()
-    cerrarModalCambio()
-  } catch (error) {
-    console.error('Error cambiando profesor:', error)
-    toast.error('Error al cambiar profesor de cobertura')
-  }
-}
-
-const cerrarModalCambio = () => {
-  modalCambioProfesor.value.show = false
-  modalCambioProfesor.value.cobertura = null
-  modalCambioProfesor.value.nuevoProfesorEmail = ''
-  modalCambioProfesor.value.razon = ''
-}
-
-const validarCobertura = async (cobertura) => {
-  try {
-    await actualizarEstadoCobertura(cobertura.id, 'VALIDADA')
-    toast.success('Cobertura validada exitosamente')
-    await cargarCoberturas()
-  } catch (error) {
-    console.error('Error validando cobertura:', error)
-    toast.error('Error al validar cobertura')
-  }
-}
-
-const eliminarCobertura = async (cobertura) => {
-  if (!confirm('¿Estás seguro de eliminar esta cobertura?')) return
-  
-  try {
-    await deleteCoberturaByAusencia(cobertura.ausenciaId)
-    toast.success('Cobertura eliminada exitosamente')
-    await cargarCoberturas()
-  } catch (error) {
-    console.error('Error eliminando cobertura:', error)
-    toast.error('Error al eliminar cobertura')
-  }
-}
-
-const redistribuirDia = async () => {
-  if (!filtros.value.fecha) {
-    toast.error('Selecciona una fecha para redistribuir')
-    return
-  }
-  
-  try {
-    await redistribuirCoberturasDia(filtros.value.fecha)
-    toast.success('Día redistribuido exitosamente')
-    await cargarCoberturas()
-  } catch (error) {
-    console.error('Error redistribuyendo día:', error)
-    toast.error('Error al redistribuir el día')
-  }
-}
-
-// Métodos de asignación manual
-const validarAsignacionManual = () => {
-  return asignacionManual.value.fecha && 
-         asignacionManual.value.hora && 
-         asignacionManual.value.profesorAusenteEmail &&
-         asignacionManual.value.grupo && 
-         asignacionManual.value.aula
-}
-
-const crearAsignacionManual = async () => {
-  if (!validarAsignacionManual()) {
-    toast.error('Complete todos los campos obligatorios')
-    return
-  }
-  
-  try {
-    // Aquí iría la lógica para crear la asignación manual
-    // Esto requeriría endpoints específicos en el backend
-    
-    toast.success('Asignación manual creada exitosamente')
-    
-    // Limpiar formulario
-    asignacionManual.value = {
-      fecha: '',
-      hora: '',
-      profesorAusenteEmail: '',
-      profesorGuardiaEmail: '',
-      grupo: '',
-      aula: '',
-      tarea: '',
-      esProblematico: false
+    if (syncError) {
+      // Si la función RPC no existe, usar el método manual
+      await manualSyncUsers();
+    } else {
+      toast.success(`✅ ${syncResult || 0} usuarios sincronizados correctamente`);
     }
     
-    await cargarCoberturas()
   } catch (error) {
-    console.error('Error creando asignación manual:', error)
-    toast.error('Error al crear asignación manual')
+    toast.error(`Error al sincronizar usuarios: ${error.message}`);
+    console.error('Error:', error);
   }
-}
+};
 
-// Métodos de alertas
-const verificarCobertura = async () => {
+// Método manual de sincronización como respaldo
+const manualSyncUsers = async () => {
   try {
-    // Simulación de verificación de cobertura
-    // En producción esto vendría del backend
+    // Obtener todos los usuarios de auth
+    const { data: { users: authUsers }, error: authError } = await supabase.auth.admin.listUsers();
     
-    alertaInsuficiencia.value = [
-      {
-        id: 1,
-        dia: 'Lunes',
-        hora: 3,
-        profesoresDisponibles: 2,
-        ausenciasTotal: 4
-      }
-    ]
-    
-    alertaDesbalance.value = profesoresList.value.filter(p => {
-      const diferencia = Math.abs((p.totalGuardias || 0) - promedioGuardias.value)
-      return diferencia > 3
-    })
-    
-    resumenSistema.value = {
-      totalCoberturas: coberturas.value.length,
-      coberturasValidadas: coberturas.value.filter(c => c.estado === 'VALIDADA').length,
-      profesoresActivos: profesoresList.value.length,
-      horasSinCobertura: Math.floor(Math.random() * 5) // Simulado
+    if (authError) {
+      throw new Error(`Error obteniendo usuarios de auth: ${authError.message}`);
     }
+
+    // Obtener usuarios existentes en la tabla usuarios
+    const { data: existingUsers, error: existingError } = await supabase
+      .from('usuarios')
+      .select('email');
     
-    toast.info('Verificación de cobertura completada')
+    if (existingError) {
+      throw new Error(`Error obteniendo usuarios existentes: ${existingError.message}`);
+    }
+
+    const existingEmails = existingUsers.map(u => u.email);
+    const usersToSync = authUsers.filter(user => 
+      user.email && !existingEmails.includes(user.email)
+    );
+
+    if (usersToSync.length === 0) {
+      toast.info('ℹ️ Todos los usuarios ya están sincronizados');
+      return;
+    }
+
+    // Crear lista de usuarios para insertar
+    const newUsers = usersToSync.map(user => ({
+      auth_id: user.id,
+      email: user.email,
+      nombre: user.user_metadata?.full_name || 
+              user.user_metadata?.name || 
+              user.email.split('@')[0],
+      rol: 'profesor', // Por defecto profesor
+      activo: true
+    }));
+
+    // Insertar en lotes para evitar errores
+    const { error: insertError } = await supabase
+      .from('usuarios')
+      .insert(newUsers);
+
+    if (insertError) {
+      throw new Error(`Error insertando usuarios: ${insertError.message}`);
+    }
+
+    toast.success(`✅ ${usersToSync.length} usuarios sincronizados correctamente`);
+    
+    // Mostrar detalles
+    const userList = usersToSync.map(u => u.email).join(', ');
+    console.log('Usuarios sincronizados:', userList);
+    
   } catch (error) {
-    console.error('Error verificando cobertura:', error)
-    toast.error('Error al verificar cobertura')
+    throw error;
   }
-}
+};
 
-// Métodos de configuración
-const exportarDatos = (formato) => {
-  toast.info(`Exportando datos en formato ${formato.toUpperCase()}...`)
-  // Aquí iría la lógica de exportación
-}
+// Modal de configuración
+const openConfigModal = () => {
+  showConfigModal.value = true;
+};
 
-const limpiarDatosAntiguos = () => {
-  if (!confirm('¿Eliminar datos de más de 6 meses? Esta acción no se puede deshacer.')) return
-  
-  toast.info('Limpiando datos antiguos...')
-  // Aquí iría la lógica de limpieza
-}
+const closeConfigModal = () => {
+  showConfigModal.value = false;
+};
 
-const recalcularContadores = () => {
-  if (!confirm('¿Recalcular todos los contadores? Esto puede tomar varios minutos.')) return
-  
-  toast.info('Recalculando contadores...')
-  // Aquí iría la lógica de recálculo
-}
+const saveConfig = () => {
+  // Guardar configuración en localStorage o en la base de datos
+  localStorage.setItem('adminConfig', JSON.stringify(config.value));
+  toast.success('Configuración guardada');
+  closeConfigModal();
+};
 
-const verificarIntegridad = () => {
-  toast.info('Verificando integridad de datos...')
-  // Aquí iría la lógica de verificación
-}
+// Exportar datos
+const exportData = () => {
+  toast.info('Función de exportación en desarrollo');
+  // Aquí podrías implementar la exportación de datos
+};
 
-const reiniciarSistema = () => {
-  if (!confirm('¿REINICIAR COMPLETAMENTE EL SISTEMA? Esto eliminará TODOS los datos.')) return
-  if (!confirm('¿Estás COMPLETAMENTE SEGURO? Esta acción NO se puede deshacer.')) return
-  
-  toast.error('Función de reinicio deshabilitada por seguridad')
-  // En producción esto estaría muy protegido
-}
-
-// Métodos auxiliares
-const emailAcortado = (email) => {
-  if (!email) return 'N/A'
-  const index = email.indexOf('@')
-  return index > 0 ? email.substring(0, index) : email.substring(0, 10)
-}
-
-const formatearFecha = (fecha) => {
-  return new Intl.DateTimeFormat('es-ES', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric'
-  }).format(new Date(fecha))
-}
-
-const getFileIcon = (fileName) => {
-  const ext = fileName.split('.').pop().toLowerCase()
-  const icons = {
-    'pdf': '📄',
-    'doc': '📝',
-    'docx': '📝',
-    'txt': '📃',
-    'jpg': '🖼️',
-    'jpeg': '🖼️',
-    'png': '🖼️'
+// Inicialización
+onMounted(() => {
+  // Cargar configuración guardada
+  const savedConfig = localStorage.getItem('adminConfig');
+  if (savedConfig) {
+    config.value = { ...config.value, ...JSON.parse(savedConfig) };
   }
-  return icons[ext] || '📎'
-}
-
-const descargarArchivo = async (archivoId) => {
-  try {
-    const response = await downloadArchivo(archivoId)
-    
-    // Crear enlace de descarga
-    const url = window.URL.createObjectURL(new Blob([response.data]))
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute('download', 'archivo')
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    window.URL.revokeObjectURL(url)
-    
-    toast.success('Archivo descargado exitosamente')
-  } catch (error) {
-    console.error('Error descargando archivo:', error)
-    toast.error('Error al descargar archivo')
-  }
-}
+  
+  // Verificar estado inicial del sistema
+  checkSystemStatus();
+});
 </script>
 
 <style scoped>
-.admin-panel-container {
-  max-width: 1400px;
+.admin-panel {
+  max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
   font-family: 'Montserrat', sans-serif;
 }
 
-.tabs-container {
+.admin-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.admin-header h1 {
+  color: #1F86A1;
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.admin-welcome {
+  color: #666;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.admin-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.card-header {
+  background: linear-gradient(135deg, #1F86A1, #4DB8D0);
+  color: white;
+  padding: 20px;
+}
+
+.card-header h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.card-content {
+  padding: 20px;
+}
+
+.card-content p {
+  color: #666;
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+.card-actions {
   display: flex;
   gap: 10px;
-  margin-bottom: 30px;
-  border-bottom: 2px solid #f0f0f0;
-  overflow-x: auto;
-}
-
-.tab-button {
-  padding: 12px 20px;
-  border: none;
-  background: transparent;
-  color: #666;
-  font-weight: 600;
-  cursor: pointer;
-  border-bottom: 3px solid transparent;
-  transition: all 0.3s ease;
-  white-space: nowrap;
-}
-
-.tab-button:hover {
-  color: #1f86a1;
-}
-
-.tab-button.active {
-  color: #1f86a1;
-  border-bottom-color: #1f86a1;
-}
-
-.tab-content {
-  min-height: 600px;
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 25px;
-  flex-wrap: wrap;
-  gap: 15px;
-}
-
-.section-header h2 {
-  margin: 0;
-  color: #333;
-}
-
-.filtros-avanzados {
-  display: flex;
-  gap: 15px;
-  align-items: center;
   flex-wrap: wrap;
 }
 
-.filtros-avanzados input,
-.filtros-avanzados select {
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  background: white;
-}
-
-.btn {
-  padding: 8px 16px;
+.btn-primary, .btn-secondary {
+  padding: 10px 20px;
   border: none;
   border-radius: 6px;
+  font-weight: 500;
   cursor: pointer;
-  font-weight: 600;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
+  font-size: 14px;
 }
 
 .btn-primary {
-  background: #1f86a1;
+  background: linear-gradient(90deg, #1F86A1, #4DB8D0);
   color: white;
 }
 
 .btn-primary:hover {
-  background: #176a82;
-}
-
-.btn-warning {
-  background: #ffa502;
-  color: white;
-}
-
-.btn-danger {
-  background: #ff4757;
-  color: white;
-}
-
-.btn-success {
-  background: #2ed573;
-  color: white;
-}
-
-.btn-info {
-  background: #3742fa;
-  color: white;
+  background: linear-gradient(90deg, #197a90, #3fa7be);
+  transform: translateY(-1px);
 }
 
 .btn-secondary {
-  background: #8e8e93;
-  color: white;
+  background: #f8f9fa;
+  color: #495057;
+  border: 1px solid #dee2e6;
 }
 
-.btn-outline {
-  background: transparent;
-  color: #1f86a1;
-  border: 1px solid #1f86a1;
+.btn-secondary:hover {
+  background: #e9ecef;
 }
 
-.btn-sm {
-  padding: 4px 8px;
-  font-size: 12px;
+.system-status {
+  margin-bottom: 20px;
 }
 
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Coberturas */
-.coberturas-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-  gap: 20px;
-}
-
-.cobertura-card {
-  background: white;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-  border-left: 4px solid #1f86a1;
-}
-
-.cobertura-header {
+.status-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
+  padding: 8px 0;
+  border-bottom: 1px solid #eee;
 }
 
-.cobertura-fecha {
-  font-weight: 600;
+.status-item:last-child {
+  border-bottom: none;
+}
+
+.status-label {
+  font-weight: 500;
   color: #333;
 }
 
-.estado-badge {
-  padding: 4px 8px;
-  border-radius: 12px;
+.status-indicator {
+  padding: 4px 12px;
+  border-radius: 20px;
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
 }
 
-.estado-badge.asignada {
-  background: #fff3cd;
-  color: #856404;
-}
-
-.estado-badge.validada {
-  background: #d1ecf1;
-  color: #0c5460;
-}
-
-.estado-badge.completada {
+.status-indicator.online {
   background: #d4edda;
   color: #155724;
 }
 
-.cobertura-info p {
-  margin: 8px 0;
-  color: #666;
+.status-indicator.offline {
+  background: #f8d7da;
+  color: #721c24;
 }
 
-.cobertura-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 15px;
-  flex-wrap: wrap;
+.status-indicator.checking {
+  background: #fff3cd;
+  color: #856404;
 }
 
-.cobertura-archivos {
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 1px solid #eee;
-}
-
-.archivos-lista-mini {
-  display: flex;
-  flex-wrap: wrap;
+.quick-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
 
-.archivo-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 8px;
+.quick-btn {
+  padding: 12px;
   background: #f8f9fa;
-  border-radius: 4px;
-  color: #1f86a1;
-  cursor: pointer;
-  text-decoration: none;
-  font-size: 12px;
-}
-
-.archivo-link:hover {
-  background: #e9ecef;
-}
-
-/* Asignación Manual */
-.asignacion-manual {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 30px;
-}
-
-.asignacion-form {
-  background: white;
-  padding: 25px;
-  border-radius: 12px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 15px;
-  margin-bottom: 15px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-}
-
-.form-group label {
-  font-weight: 600;
-  margin-bottom: 5px;
-  color: #333;
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-  padding: 10px;
-  border: 1px solid #ddd;
+  border: 1px solid #dee2e6;
   border-radius: 6px;
-  font-size: 14px;
-}
-
-.form-group textarea {
-  resize: vertical;
-  height: 80px;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   cursor: pointer;
-}
-
-.profesores-disponibles {
-  background: white;
-  padding: 25px;
-  border-radius: 12px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-}
-
-.disponibles-hint {
-  color: #666;
+  transition: all 0.2s ease;
   font-size: 14px;
-  margin-bottom: 15px;
-}
-
-.profesores-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 15px;
-}
-
-.profesor-card {
-  padding: 15px;
-  border: 2px solid #eee;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.profesor-card:hover {
-  border-color: #1f86a1;
-}
-
-.profesor-card.selected {
-  border-color: #1f86a1;
-  background: #f0f8ff;
-}
-
-.profesor-info h4 {
-  margin: 0 0 5px 0;
-  color: #333;
-}
-
-.profesor-info p {
-  margin: 0;
-  color: #666;
-  font-size: 14px;
-}
-
-.profesor-stats {
-  margin-top: 10px;
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.stat {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.stat-label {
-  font-size: 12px;
-  color: #666;
-}
-
-.stat-value {
-  font-weight: 600;
-  color: #1f86a1;
-}
-
-/* Alertas */
-.alertas-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 20px;
-}
-
-.alerta-card {
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-}
-
-.alerta-card.error {
-  background: rgba(255, 71, 87, 0.1);
-  border-left: 4px solid #ff4757;
-}
-
-.alerta-card.warning {
-  background: rgba(255, 165, 2, 0.1);
-  border-left: 4px solid #ffa502;
-}
-
-.alerta-card.success {
-  background: rgba(46, 213, 115, 0.1);
-  border-left: 4px solid #2ed573;
-}
-
-.alerta-header h3 {
-  margin: 0 0 15px 0;
-  color: #333;
-}
-
-.alerta-body ul {
-  margin: 10px 0;
-  padding-left: 20px;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 15px;
-}
-
-.stat-item {
   text-align: center;
 }
 
-.stat-number {
-  display: block;
-  font-size: 2em;
-  font-weight: 600;
-  color: #1f86a1;
-}
-
-/* Configuración */
-.configuracion-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-  gap: 20px;
-}
-
-.config-card {
-  background: white;
-  padding: 25px;
-  border-radius: 12px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-}
-
-.config-card h3 {
-  margin-top: 0;
-  color: #333;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 10px;
-}
-
-.config-options {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
+.quick-btn:hover {
+  background: #e9ecef;
+  transform: translateY(-1px);
 }
 
 /* Modal */
@@ -1216,9 +514,9 @@ const descargarArchivo = async (archivoId) => {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0,0,0,0.5);
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1228,7 +526,6 @@ const descargarArchivo = async (archivoId) => {
 .modal-content {
   background: white;
   border-radius: 12px;
-  padding: 0;
   max-width: 500px;
   width: 90%;
   max-height: 80vh;
@@ -1245,90 +542,73 @@ const descargarArchivo = async (archivoId) => {
 
 .modal-header h3 {
   margin: 0;
-  color: #333;
+  color: #1F86A1;
 }
 
-.btn-close {
+.close-btn {
   background: none;
   border: none;
-  font-size: 1.2em;
+  font-size: 24px;
   cursor: pointer;
+  color: #999;
 }
 
 .modal-body {
   padding: 20px;
 }
 
-.nuevo-profesor-selection,
-.razon-cambio {
-  margin: 15px 0;
+.config-section {
+  margin-bottom: 20px;
 }
 
-.nuevo-profesor-selection label,
-.razon-cambio label {
+.config-section label {
   display: block;
-  font-weight: 600;
   margin-bottom: 5px;
+  font-weight: 500;
   color: #333;
 }
 
-.nuevo-profesor-selection select,
-.razon-cambio textarea {
+.config-section input {
   width: 100%;
   padding: 10px;
   border: 1px solid #ddd;
   border-radius: 6px;
+  font-size: 14px;
 }
 
 .modal-footer {
+  padding: 20px;
+  border-top: 1px solid #eee;
   display: flex;
   gap: 10px;
   justify-content: flex-end;
-  padding: 20px;
-  border-top: 1px solid #eee;
 }
 
 /* Responsive */
 @media (max-width: 768px) {
-  .tabs-container {
-    flex-wrap: wrap;
+  .admin-panel {
+    padding: 15px;
   }
-  
-  .section-header {
-    flex-direction: column;
-    align-items: stretch;
+
+  .admin-header h1 {
+    font-size: 2rem;
   }
-  
-  .filtros-avanzados {
-    flex-direction: column;
+
+  .admin-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
   }
-  
-  .coberturas-grid {
+
+  .card-header, .card-content {
+    padding: 15px;
+  }
+
+  .quick-actions {
     grid-template-columns: 1fr;
   }
-  
-  .asignacion-manual {
-    grid-template-columns: 1fr;
-  }
-  
-  .form-row {
-    grid-template-columns: 1fr;
-  }
-  
-  .profesores-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .alertas-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .configuracion-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
+
+  .modal-content {
+    width: 95%;
   }
 }
 </style>
