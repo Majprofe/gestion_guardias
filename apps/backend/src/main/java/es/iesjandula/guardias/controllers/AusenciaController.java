@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -21,7 +22,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/ausencias")
 @Tag(name = "Ausencias", description = "Gestión de ausencias de profesores")
-@CrossOrigin(origins = "*")
 public class AusenciaController {
     
     @Autowired
@@ -106,5 +106,27 @@ public class AusenciaController {
     public ResponseEntity<Map<String, List<AusenciaConGuardiasDTO>>> obtenerAusenciasHoy() {
         Map<String, List<AusenciaConGuardiasDTO>> ausencias = ausenciaService.listarAusenciasPorFechaAgrupadasPorHora(LocalDate.now());
         return ResponseEntity.ok(ausencias);
+    }
+    
+    /**
+     * Test simple para verificar conectividad con la base de datos
+     */
+    @GetMapping("/test")
+    @Operation(summary = "Test de conectividad", description = "Endpoint simple para verificar que el servicio funciona")
+    public ResponseEntity<Map<String, Object>> test() {
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", "OK");
+        response.put("timestamp", LocalDate.now());
+        response.put("message", "Servicio de ausencias funcionando correctamente");
+        
+        try {
+            // Test simple de base de datos
+            long count = ausenciaService.contarTotalAusencias();
+            response.put("totalAusenciasEnBD", count);
+        } catch (Exception e) {
+            response.put("errorBD", e.getMessage());
+        }
+        
+        return ResponseEntity.ok(response);
     }
 }

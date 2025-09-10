@@ -54,3 +54,6 @@ build/
 .env
 *.pem
 
+# Instructions file
+instructions.md
+

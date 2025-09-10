@@ -370,4 +370,11 @@ public class AusenciaService {
         logger.info("Ausencia con ID {} eliminada correctamente", id);
     }
 
+    /**
+     * Método de test para verificar conectividad con la base de datos
+     */
+    public long contarTotalAusencias() {
+        return ausenciaRepository.count();
+    }
+
 }

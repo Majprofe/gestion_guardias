@@ -28,10 +28,19 @@ public class CorsConfig {
                                 "http://localhost:5500",  // Desarrollo local
                                 "http://localhost:5173",  // Vite dev server
                                 "http://localhost:3000",  // Posible puerto alternativo
+                                "http://localhost:8081",  // Puerto del backend
                                 "https://gestion-guardias.iesjandula.es" // Producción
                         )
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
-                        .allowedHeaders("*")
+                        .allowedHeaders(
+                                "Content-Type",
+                                "Authorization", 
+                                "X-Requested-With",
+                                "Accept",
+                                "Origin",
+                                "Access-Control-Request-Method",
+                                "Access-Control-Request-Headers"
+                        )
                         .allowCredentials(true)
                         .maxAge(3600); // Cache preflight por 1 hora
             }

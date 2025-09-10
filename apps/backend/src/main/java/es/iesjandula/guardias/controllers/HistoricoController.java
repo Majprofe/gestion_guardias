@@ -14,7 +14,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/historico")
-@CrossOrigin(origins = "*")
 @Tag(name = "Histórico de ausencias", description = "Operaciones relacionadas con el histórico de ausencias de los profesores.")
 public class HistoricoController {
 

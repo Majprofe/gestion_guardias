@@ -112,11 +112,19 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleGenericException(
             Exception ex, WebRequest request) {
         
+        Map<String, String> debugInfo = new HashMap<>();
+        debugInfo.put("exceptionType", ex.getClass().getSimpleName());
+        debugInfo.put("exceptionMessage", ex.getMessage() != null ? ex.getMessage() : "No message available");
+        if (ex.getCause() != null) {
+            debugInfo.put("cause", ex.getCause().getMessage() != null ? ex.getCause().getMessage() : ex.getCause().toString());
+        }
+        
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
                 .error("Internal Server Error")
-                .message("Ha ocurrido un error interno. Contacte al administrador del sistema.")
+                .message("Ha ocurrido un error interno. Contacta al administrador del sistema.")
+                .details(debugInfo)
                 .path(request.getDescription(false).replace("uri=", ""))
                 .build();
 

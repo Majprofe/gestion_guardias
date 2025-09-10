@@ -23,7 +23,6 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequestMapping("/api/estadisticas")
-@CrossOrigin(origins = "*")
 @Tag(name = "Estadísticas", description = "Métricas y reportes del sistema de guardias")
 public class EstadisticasController {
 

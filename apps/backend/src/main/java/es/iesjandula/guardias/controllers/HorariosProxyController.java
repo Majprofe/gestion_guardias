@@ -16,7 +16,6 @@ import java.util.Map;
  */
 @RestController("Horarios Proxy")
 @RequestMapping("/api/horarios")
-@CrossOrigin(origins = "*")
 public class HorariosProxyController {
 
     @Value("${app.horarios.api.url:http://localhost:8082}")

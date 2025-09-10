@@ -6,15 +6,10 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-
-import java.util.Arrays;
 
 /**
- * Configuración de seguridad COMPLETAMENTE DESHABILITADA para desarrollo.
- * No hay autenticación, no hay autorización, acceso libre a TODO.
+ * Configuración de seguridad básica para el microservicio de horarios.
+ * Acceso libre para todos los endpoints ya que se accede a través del proxy del backend principal.
  */
 @Configuration
 @EnableWebSecurity
@@ -24,35 +19,11 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .authorizeHttpRequests(authz -> authz
-                .requestMatchers("/**").permitAll()
                 .anyRequest().permitAll()
             )
             .csrf(csrf -> csrf.disable())
-            .httpBasic(httpBasic -> httpBasic.disable())
-            .formLogin(form -> form.disable())
-            .logout(logout -> logout.disable())
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .headers(headers -> headers.frameOptions().disable())
-            .securityContext(context -> context.disable())
-            .requestCache(cache -> cache.disable())
-            .anonymous(anonymous -> anonymous.disable())
-            .rememberMe(rememberMe -> rememberMe.disable());
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
             
         return http.build();
-    }
-
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(Arrays.asList("*"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"));
-        configuration.setAllowedHeaders(Arrays.asList("*"));
-        configuration.setAllowCredentials(false);
-        configuration.setExposedHeaders(Arrays.asList("*"));
-        
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
-        return source;
     }
 }
