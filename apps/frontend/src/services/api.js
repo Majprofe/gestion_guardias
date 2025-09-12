@@ -17,7 +17,7 @@ export const getActividades = () => axios.get(`${API}/api/horarios/actividades`)
 export const getAsignaturas = () => axios.get(`${API}/api/horarios/asignaturas`);
 export const getAulas = () => axios.get(`${API}/api/horarios/aulas`);
 export const getGrupos = () => axios.get(`${API}/api/horarios/grupos`);
-export const getHorarioByIdProfesor = (id) => axios.get(`${API}/api/horarios/horario/${id}`);
+export const getHorarioByEmailProfesor = (email) => axios.get(`${API}/api/horarios/horario/profesor/email?email=${encodeURIComponent(email)}`);
 export const getTramosHorario = () => axios.get(`${API}/api/horarios/tramohorarios`);
 
 // Nuevos endpoints específicos

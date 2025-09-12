@@ -37,8 +37,8 @@ import axios from 'axios'
 import { ref, watch } from 'vue'
 import { useUserStore } from "@/stores/user"
 import { useToast } from "vue-toastification"
+import { getHorarioByEmailProfesor } from "@/services/api"
 
-const API_URL = import.meta.env.VITE_API_URL;
 const toast = useToast()
 const userStore = useUserStore()
 const horario = ref(null)
@@ -50,9 +50,7 @@ watch(
     async (email) => {
         if (email && email !== "Sin usuario") {
             try {
-                console.log('🔍 Cargando horario para email:', email);
-                console.log('🔍 Cargando horario desde API:', `${API_URL}/horario/profesor/email?email=${email}`);
-                const response = await axios.get(`${API_URL}/horario/profesor/email?email=${email}`)
+                const response = await getHorarioByEmailProfesor(email)
                 profesorNombre.value = response.data.profesorNombre
                 horario.value = response.data.horario
                 transformarHorario()
