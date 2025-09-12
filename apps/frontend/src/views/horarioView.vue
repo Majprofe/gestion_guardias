@@ -1,5 +1,4 @@
 <template>
-    <h1>Horario:</h1>
     <horario />
 </template>
 

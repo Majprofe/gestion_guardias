@@ -1,4 +1,5 @@
 <template>
+    <h1>Horario:</h1>
     <div class="mi-horario">
         <div v-if="Object.keys(horarioTransformado).length">
             <table class="horario-clasico">
@@ -37,8 +38,8 @@ import { ref, watch } from 'vue'
 import { useUserStore } from "@/stores/user"
 import { useToast } from "vue-toastification"
 
+const API_URL = import.meta.env.VITE_API_URL;
 const toast = useToast()
-
 const userStore = useUserStore()
 const horario = ref(null)
 const profesorNombre = ref('')
@@ -49,7 +50,9 @@ watch(
     async (email) => {
         if (email && email !== "Sin usuario") {
             try {
-                const response = await axios.get(`http://localhost:8080/horario/profesor/email?email=${email}`)
+                console.log('🔍 Cargando horario para email:', email);
+                console.log('🔍 Cargando horario desde API:', `${API_URL}/horario/profesor/email?email=${email}`);
+                const response = await axios.get(`${API_URL}/horario/profesor/email?email=${email}`)
                 profesorNombre.value = response.data.profesorNombre
                 horario.value = response.data.horario
                 transformarHorario()
