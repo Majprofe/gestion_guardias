@@ -3,12 +3,6 @@ import axios from 'axios';
 // 🎯 CONFIGURACIÓN UNIFICADA - Solo una API
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8081';
 
-// Log para debugging - puedes comentar estas líneas en producción
-console.log('🔧 API Configuration (UNIFIED):');
-console.log('  VITE_API_URL:', import.meta.env.VITE_API_URL);
-console.log('  Final API:', API);
-console.log('  🎉 Frontend ahora usa solo UNA API!');
-
 // ============================================================================
 // 📊 ENDPOINTS DE HORARIOS (ahora proxy desde backend principal)
 // ============================================================================

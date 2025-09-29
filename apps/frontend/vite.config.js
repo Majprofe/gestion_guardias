@@ -15,8 +15,8 @@ export default defineConfig({
   envDir: path.resolve(__dirname, '../../'),
   server: {
     port: 5500,
-    host: true,
-    open: false
+    host: 'localhost',
+    open: true
   },
   resolve: {
     alias: {
