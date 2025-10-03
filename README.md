@@ -1,181 +1,202 @@
-# ✨ Gestión de Guardias Escolares
+# 🏫 Sistema de Gestión de Guardias
 
-![Banner del Proyecto](https://github.com/IESJandula/gestion_guardias/raw/main/Client/src/assets/iesjandula.png)
+Sistema integral para la gestión de guardias escolares con autenticación Google Workspace.
 
-Sistema completo de **Gestión de Faltas y Coberturas Docentes** desarrollado como proyecto final del ciclo de Desarrollo de Aplicaciones Web. Esta aplicación resuelve la necesidad de organizar de manera eficiente las ausencias del profesorado y la cobertura de esas ausencias por parte de otros docentes disponibles.
+## 🚀 Estructura del Proyecto
 
-Este sistema está orientado a su uso en **instituciones educativas** y permite:
-- Registrar de forma intuitiva las ausencias de los docentes.
-- Asignar automáticamente coberturas según el profesorado disponible en horario de guardia.
-- Permitir la asignación manual desde el panel de administrador o responsable.
-- Visualizar tanto las faltas como las coberturas desde diferentes vistas según el rol del usuario.
-
----
-
-## 🌐 Tecnologías y Arquitectura
-
-- **Frontend:** Vue 3 con Vite, Pinia, Vue Router y Toastification.
-- **Backend:** Spring Boot + Spring Data JPA.
-- **Base de datos:** MySQL.
-- **Persistencia:** Hibernate ORM.
-- **Control de acceso:** Vía identificación por email (en localStorage).
-- **Estilo:** CSS con soporte a Tailwind (opcional).
-
----
-
-## 📊 Características del Proyecto
-
-### Registro de Ausencias
-Los profesores pueden acceder a un formulario en el que seleccionan:
-- Fecha de la ausencia.
-- Si afecta a todo el día o solo a determinadas horas.
-- Aula, grupo, hora y tarea para cada hora afectada.
-
-El sistema permite guardar varias ausencias en una sola operación.
-
-### Asignación Automática de Coberturas
-Cuando se registra una ausencia, el sistema:
-- Consulta qué profesores están en guardia esa hora y día.
-- De entre ellos, elige el que menos guardias ha realizado.
-- Asigna automáticamente esa cobertura.
-
-### Panel de Faltas del Día
-Desde esta vista:
-- Se consultan las ausencias por día.
-- Se muestra qué profesor la cubre (si hay cobertura).
-- Se permite asignar manualmente una cobertura.
-- Los profesores sólo pueden eliminar sus propias ausencias.
-
-### Histórico de Ausencias
-Desde el panel histórico:
-- Se puede consultar cualquier ausencia anterior.
-- Se permite eliminar una cobertura y reasignarla.
-- Se muestra toda la información contextual (hora, grupo, aula, tarea).
-
-### Mis Guardias / Ausencias
-Cada profesor puede consultar:
-- Las ausencias que él mismo ha registrado.
-- Las coberturas en las que ha participado.
-
----
-
-## 🚀 Despliegue y Uso en Local
-
-### 1. Requisitos Previos
-
-- Node.js 18+
-- npm 9+
-- JDK 17
-- Maven 3.8+
-- MySQL Server 8+
-
----
-
-### 2. Configurar Base de Datos MySQL
-
-```sql
-CREATE DATABASE gestion_guardias;
+```
+📦 gestion_guardias/
+├── 📁 apps/                 # Aplicaciones principales
+│   ├── 📱 frontend/         # Vue.js + Vite (Puerto 5500)
+│   ├── 🚀 backend/          # Spring Boot API Guardias (Puerto 8081)
+│   └── ⏰ horarios/         # Microservicio horarios (Puerto 8082)
+├── 📁 infrastructure/       # Configuración infraestructura
+├── 📄 .env                  # ⚡ Variables de entorno centralizadas
+├── 📄 start-service.ps1     # 🛠️ Script de inicio automático
+└── 📄 docker-compose.yml    # Orquestación contenedores
 ```
 
----
+## 🛠️ Tecnologías
 
-### 3. Backend (Spring Boot)
+### Frontend
+- **Vue.js 3** + **Vite** + **Pinia**
+- **Supabase** para autenticación y BD
+- **Google OAuth 2.0** para login
+- **Element Plus** + **Tailwind CSS**
 
-#### a. Acceder a la carpeta del backend:
+### Backend
+- **Spring Boot 3.4.4** + **Java 21**
+- **PostgreSQL** + **Supabase**
+- **SpringDoc OpenAPI** (Swagger)
+- **Spring Security** (deshabilitado para desarrollo)
+
+### Base de Datos
+- **Supabase PostgreSQL**
+- **Row Level Security (RLS)**
+- **Autenticación Google Workspace**
+
+## 🚀 Inicio Rápido
+
+### Prerrequisitos
+- **Node.js 18+**
+- **Java 21+**
+- **Maven 3.6+**
+- **PowerShell** (para script de inicio)
+
+### ⚡ Instalación y Ejecución
+
+#### 1️⃣ Configuración Inicial
 ```bash
-cd backend
+# Clonar repositorio
+git clone https://github.com/Majprofe/gestion_guardias.git
+cd gestion_guardias
+
+# Configurar variables de entorno
+cp .env.example .env
+# ✏️ Edita .env con tus credenciales reales
 ```
 
-#### b. Crear archivo de configuración:
-Crea `src/main/resources/application.properties` con:
-```properties
-spring.datasource.url=jdbc:mysql://localhost:3306/gestion_guardias
-spring.datasource.username=usuario
-spring.datasource.password=contraseña
-spring.jpa.hibernate.ddl-auto=update
-spring.jpa.show-sql=true
+#### 2️⃣ Variables de Entorno (.env)
+```env
+# 🌐 SUPABASE
+VITE_SUPABASE_URL=tu_supabase_url
+VITE_SUPABASE_ANON_KEY=tu_supabase_anon_key
+
+# 🗄️ DATABASE  
+DATABASE_URL=jdbc:postgresql://...
+DATABASE_USERNAME=postgres.xxx
+DATABASE_PASSWORD=tu_password
+
+# 🚀 API ENDPOINTS
+VITE_API_URL=http://localhost:8081
+VITE_PLATFORM_URL=http://localhost:8082
+
+# 🔐 AUTENTICACIÓN
+VITE_ALLOWED_DOMAIN=g.educaand.es
 ```
 
-#### c. Ejecutar el backend
+#### 3️⃣ Ejecución con Script Automático
+```powershell
+# 🚀 Iniciar todos los servicios
+.\start-service.ps1
+
+# 🎯 Iniciar servicios específicos
+.\start-service.ps1 frontend    # Solo frontend
+.\start-service.ps1 backend     # Solo backend guardias  
+.\start-service.ps1 horarios    # Solo backend horarios
+```
+
+#### 4️⃣ Ejecución Manual
 ```bash
-./mvnw spring-boot:run
-```
-Se iniciará en `http://localhost:8081`
-
----
-
-### 4. Frontend (Vue 3)
-
-#### a. Accede al directorio del frontend
-```bash
-cd ../frontend
-```
-
-#### b. Instala dependencias
-```bash
+# Frontend (Terminal 1)
+cd apps/frontend
 npm install
-```
-
-#### c. Ejecuta la aplicación
-```bash
 npm run dev
+
+# Backend Guardias (Terminal 2)  
+cd apps/backend
+./mvnw.cmd spring-boot:run
+
+# Backend Horarios (Terminal 3)
+cd apps/horarios
+./mvnw.cmd spring-boot:run
 ```
 
-El frontend estará disponible en:
+## 🌐 URLs de Acceso
 
+| Servicio | URL | Descripción |
+|----------|-----|-------------|
+| 🌐 **Frontend** | https://localhost:5500 | Aplicación Vue.js |
+| 🔧 **API Guardias** | http://localhost:8081/swagger-ui.html | Documentación Swagger |
+| ⏰ **API Horarios** | http://localhost:8082/swagger-ui.html | Documentación Swagger |
+
+## 🔐 Autenticación
+
+- **Google OAuth 2.0** con dominio `@g.educaand.es`
+- **Supabase Auth** para gestión de sesiones
+- **Autenticación automática** de profesores
+- **Control de roles** (admin/profesor)
+
+## 📁 Configuración Centralizada
+
+### ✅ Ventajas del .env centralizado:
+- 🎯 **Una sola fuente** de verdad para variables
+- 🔄 **Sincronización automática** entre servicios  
+- 🛡️ **Seguridad mejorada** (un solo archivo a proteger)
+- 🚀 **Fácil despliegue** y configuración
+
+### 📋 Variables por Servicio:
+- **Frontend**: Variables con prefijo `VITE_`
+- **Backend**: Variables sin prefijo
+- **Ambos**: Comparten credenciales de Supabase
+
+## 🛠️ Desarrollo
+
+### Scripts Disponibles
+```json
+{
+  "dev:frontend": "cd apps/frontend && npm run dev",
+  "dev:backend": "cd apps/backend && ./mvnw.cmd spring-boot:run", 
+  "dev:horarios": "cd apps/horarios && ./mvnw.cmd spring-boot:run",
+  "build:frontend": "cd apps/frontend && npm run build"
+}
 ```
-http://localhost:5500
+
+### Estructura de Carpetas
+```
+frontend/
+├── src/
+│   ├── components/     # Componentes reutilizables
+│   ├── views/         # Páginas principales  
+│   ├── stores/        # Estado global (Pinia)
+│   ├── services/      # APIs y servicios
+│   └── router/        # Enrutamiento
+└── vite.config.js     # ⚡ Lee .env desde raíz
+
+backend/
+├── src/main/java/
+│   ├── controller/    # Controladores REST
+│   ├── service/       # Lógica de negocio
+│   ├── model/         # Entidades JPA
+│   └── config/        # Configuración CORS
 ```
 
----
+## 📚 Documentación API
 
-## 📸 Capturas Recomendadas
+- **Swagger UI Guardias**: http://localhost:8081/swagger-ui.html
+- **Swagger UI Horarios**: http://localhost:8082/swagger-ui.html  
+- **OpenAPI JSON**: http://localhost:8081/v3/api-docs
 
-> En la carpeta `assets` se encuentran las siguientes imagenes necesarias para la visualización de la web:
+## 🐛 Solución de Problemas
 
-1. `formulario-ausencia.png` — vista del formulario de alta.
-2. `gestion-faltas.png` — vista de faltas del día.
-3. `historico.png` — gestión manual de coberturas.
-4. `mis-guardias.png` — vista personalizada del profesor.
+### ❌ Problemas Comunes:
 
----
+1. **Puerto ocupado**: `taskkill /F /IM java.exe`
+2. **Variables no cargadas**: Verificar `.env` en raíz
+3. **CORS errors**: Verificar `WebConfig.java`
+4. **Auth Google**: Configurar redirect URI en Google Console
 
-## 📈 Estructura del Repositorio
-
-```
-gestion-guardias/
-├── backend/
-│   ├── src/
-│   ├── pom.xml
-│   └── application.properties
-├── frontend/
-│   ├── src/
-│   ├── package.json
-│   └── vite.config.js
-├── docs/
-│   └── [capturas y banner]
-├── README.md
-└── .gitignore
-```
-
----
-
-## 🎓 Créditos y Autor
-
-**Autor:** Álvaro Manuel Solís Martínez, Pau Barón Jiménez, Francisco Javier García Pedrajas
-**Email:** asolmar680@g.educaand.es
-
----
-
-
-## ⭐ Contribuciones
-
-Para ayudar a la mejora futura de la aplicación como:
-- Reportar errores
-- Proponer mejoras
-- Hacer un fork y enviar un PR
-
-Clona el repositorio:
-
+### � Logs y Debug:
 ```bash
-git clone https://github.com/tuusuario/gestion-guardias.git
+# Ver logs del backend
+tail -f apps/backend/logs/application.log
+
+# Debug del frontend  
+# Abrir DevTools en https://localhost:5500
+```
+
+## �👥 Contribución
+
+1. **Fork** del proyecto
+2. Crear **rama feature**: `git checkout -b feature/nueva-funcionalidad`
+3. **Commit** cambios: `git commit -m 'Add nueva funcionalidad'`
+4. **Push** a la rama: `git push origin feature/nueva-funcionalidad`  
+5. Crear **Pull Request**
+
+## 📄 Licencia
+
+MIT License - ver [LICENSE](LICENSE) para detalles.
+
+---
+
+💡 **Tip**: Usa `.\start-service.ps1` para una experiencia de desarrollo óptima!
