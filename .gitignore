@@ -72,3 +72,7 @@ target/
 
 # Instructions file
 instructions.md
+
+# Uploaded files
+uploads/
+!uploads/.gitkeep

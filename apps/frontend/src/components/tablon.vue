@@ -11,7 +11,9 @@
                         <tr>
                             <th>Profesor Ausente</th>
                             <th>Aula - Grupo</th>
+                            <th>Tarea</th>
                             <th>Profesor que Cubre</th>
+                            <th>Material</th>
                             <th class="acciones-columna" v-if="mostrarAcciones(faltasHora)">Acciones</th>
                         </tr>
                     </thead>
@@ -19,11 +21,27 @@
                         <tr v-for="(falta, index) in faltasHora" :key="index">
                             <td :data-label="'Profesor Ausente'">{{ emailAcortado(falta.profesorEmail) }}</td>
                             <td :data-label="'Aula - Grupo'">{{ falta.aula }} - {{ falta.grupo }}</td>
+                            <td :data-label="'Tarea'" class="tarea-celda">
+                                <span class="tarea-texto">{{ falta.tarea || 'Sin especificar' }}</span>
+                            </td>
                             <td :data-label="'Profesor que Cubre'">
                                 <span v-if="falta.cobertura">
                                     {{ emailAcortado(falta.profesorCubreEmail) }}
                                 </span>
                                 <span v-else class="no-cubrir">No cubierta</span>
+                            </td>
+                            <td :data-label="'Material'" class="material-celda">
+                                <div v-if="falta.archivos && falta.archivos.length > 0" class="material-archivos">
+                                    <a v-for="archivo in falta.archivos" 
+                                       :key="archivo.id"
+                                       :href="'http://localhost:8081' + archivo.urlDescarga"
+                                       download
+                                       class="archivo-link"
+                                       :title="'Descargar ' + archivo.nombreArchivo">
+                                        📄 {{ archivo.nombreArchivo }}
+                                    </a>
+                                </div>
+                                <span v-else class="sin-material">Sin material</span>
                             </td>
                             <td v-if="falta.profesorEmail === usuarioEmail && !esFechaActual" class="acciones-celda">
                                 <button @click="eliminarAusencia(falta.id, hora, index)" class="btn-eliminar-falta">
@@ -96,52 +114,34 @@ const cargarFaltas = async () => {
     }
 
     try {
-        const response = await axios.get("http://localhost:8081/api/ausencias/por-fecha", {
-            params: { fecha: fecha.value }
-        });
+        const response = await axios.get(`http://localhost:8081/api/ausencias/fecha/${fecha.value}`);
 
-        const ausencias = response.data;
+        const ausenciasPorHora = response.data;
         const agrupadas = {};
 
-        const faltasArray = await Promise.all(
-            Object.entries(ausencias).flatMap(([hora, listaAusencias]) =>
-                listaAusencias.map(async (ausencia) => {
-                    if (!ausencia.id) return null;
-
-                    let profesorEmail = ausencia.profesorAusenteEmail?.toLowerCase() || "desconocido@dominio.com";
-                    let profesorCubreEmail = null;
-                    let cobertura = false;
-
-                    try {
-                        const coberturaResponse = await axios.get(
-                            `http://localhost:8081/api/coberturas/ausencia/${ausencia.id}`
-                        );
-
-                        if (coberturaResponse.data?.profesorCubreEmail) {
-                            profesorCubreEmail = coberturaResponse.data.profesorCubreEmail.toLowerCase();
-                            cobertura = true;
-                        }
-                    } catch { }
-
-                    const falta = {
-                        id: ausencia.id,
-                        profesorEmail,
-                        aula: ausencia.aula,
-                        grupo: ausencia.grupo,
-                        profesorCubreEmail,
-                        cobertura,
-                        hora
-                    };
-
-                    if (!agrupadas[hora]) agrupadas[hora] = [];
-                    agrupadas[hora].push(falta);
-                    return falta;
-                })
-            )
-        );
+        // El backend ya nos devuelve las ausencias agrupadas por hora
+        for (const [hora, listaAusencias] of Object.entries(ausenciasPorHora)) {
+            agrupadas[hora] = listaAusencias.map(ausencia => {
+                // Cada ausencia tiene un array de horas, tomamos la primera (solo hay una por la agrupación del backend)
+                const horaData = ausencia.horas[0];
+                
+                return {
+                    id: ausencia.id,
+                    profesorEmail: ausencia.profesorAusenteEmail?.toLowerCase() || "desconocido@dominio.com",
+                    aula: horaData.aula,
+                    grupo: horaData.grupo,
+                    tarea: horaData.tarea,
+                    profesorCubreEmail: horaData.cobertura?.profesorCubreEmail?.toLowerCase() || null,
+                    cobertura: horaData.cobertura !== null,
+                    archivos: horaData.archivos || [],
+                    hora
+                };
+            });
+        }
 
         faltasPorHora.value = agrupadas;
     } catch (error) {
+        console.error("Error al obtener las faltas:", error);
         toast.error("Error al obtener las faltas.");
     }
 };
@@ -289,6 +289,62 @@ button:hover {
     font-size: 13px;
 }
 
+.tarea-celda {
+    max-width: 250px;
+}
+
+.tarea-texto {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    color: #555;
+}
+
+.material-celda {
+    min-width: 150px;
+}
+
+.material-archivos {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.archivo-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    color: #1F86A1;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+.archivo-link:hover {
+    background-color: #1F86A1;
+    color: white;
+    border-color: #1F86A1;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(31, 134, 161, 0.2);
+}
+
+.sin-material {
+    color: #999;
+    font-style: italic;
+    font-size: 13px;
+}
+
 p {
     margin-top: 20px;
     font-style: italic;
@@ -345,6 +401,21 @@ p {
 
     .btn-eliminar-pequeno {
         margin-top: 8px;
+    }
+
+    .tarea-celda,
+    .material-celda {
+        max-width: 100%;
+    }
+
+    .tarea-texto {
+        white-space: normal;
+        word-wrap: break-word;
+    }
+
+    .archivo-link {
+        width: 100%;
+        justify-content: flex-start;
     }
 
     button,

@@ -31,6 +31,15 @@ export const getProfesorPorEmail = (email) =>
 export const createAusenciaMultiple = (ausenciaMultipleDTO) => 
     axios.post(`${API}/api/ausencias/multiple`, ausenciaMultipleDTO);
 
+export const crearAusencia = (ausenciaData) => {
+    // Detectar si es FormData (con archivos) o JSON simple
+    const headers = ausenciaData instanceof FormData 
+        ? { 'Content-Type': 'multipart/form-data' }
+        : { 'Content-Type': 'application/json' };
+    
+    return axios.post(`${API}/api/ausencias`, ausenciaData, { headers });
+};
+
 // ============================================================================
 // 🔍 ENDPOINTS DE SALUD Y MONITOREO
 // ============================================================================

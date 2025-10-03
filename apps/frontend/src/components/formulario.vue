@@ -26,8 +26,8 @@
             </p>
 
             <transition-group name="fade" tag="div" class="form-group" v-if="horasClase.length">
-                <label class="form-label">Horas con clase ese día:</label>
-                <div v-for="(hora, index) in horasClase" :key="index" class="hora-tarea-card"
+                <label key="label-horas" class="form-label">Horas con clase ese día:</label>
+                <div v-for="(hora, index) in horasClase" :key="`hora-${index}`" class="hora-tarea-card"
                     :class="{ selected: hora.seleccionada }">
                     <div class="hora-tarea-header">
                         <template v-if="diaCompleto === 'false'">
@@ -39,6 +39,35 @@
                     </div>
                     <textarea v-model="hora.descripcion" placeholder="Descripción de la tarea"
                         :disabled="diaCompleto === 'false' && !hora.seleccionada" class="tarea-descripcion"></textarea>
+                    
+                    <!-- Sección de archivos PDF -->
+                    <div class="archivos-section" v-if="hora.seleccionada || diaCompleto === 'true'">
+                        <label class="archivos-label">
+                            📎 Material adicional (opcional, máx. 3 archivos PDF de 30MB cada uno):
+                        </label>
+                        <input 
+                            type="file" 
+                            accept="application/pdf,.pdf"
+                            multiple
+                            :disabled="diaCompleto === 'false' && !hora.seleccionada"
+                            @change="handleFileChange($event, index)"
+                            class="file-input"
+                            :ref="el => fileInputs[index] = el"
+                        />
+                        
+                        <!-- Preview de archivos seleccionados -->
+                        <div v-if="hora.archivos && hora.archivos.length > 0" class="archivos-preview">
+                            <div v-for="(archivo, fileIndex) in hora.archivos" :key="`archivo-${index}-${fileIndex}`" 
+                                 class="archivo-item">
+                                <span class="archivo-icon">📄</span>
+                                <span class="archivo-nombre">{{ archivo.name }}</span>
+                                <span class="archivo-tamano">({{ formatFileSize(archivo.size) }})</span>
+                                <button type="button" @click="removeFile(index, fileIndex)" class="btn-remove-file">
+                                    ✕
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </transition-group>
 
@@ -59,9 +88,9 @@
 import { ref, onMounted } from "vue";
 import axios from "axios";
 import { useToast } from "vue-toastification";
+import { getHorarioByEmailProfesor, getHorarioProfesorPorDia, crearAusencia } from "@/services/api";
 
 const toast = useToast();
-const API_URL = import.meta.env.VITE_API_URL;
 
 const correo = ref("");
 const fecha = ref("");
@@ -70,6 +99,7 @@ const diaCompleto = ref("");
 const horasClase = ref([]);
 const errorFecha = ref(false);
 const cargando = ref(false);
+const fileInputs = ref([]);
 
 onMounted(() => {
     const hoy = new Date();
@@ -86,24 +116,54 @@ const seleccionarDiaCompleto = valor => {
 };
 
 const cargarHorasDelDia = async () => {
-    const dia = new Date(fecha.value).getDay();
+    if (!fecha.value) return;
+
+    // Corregir problema de zona horaria añadiendo 'T00:00:00' para forzar hora local
+    const fechaLocal = new Date(fecha.value + 'T00:00:00');
+    const dia = fechaLocal.getDay();
+    
+    // Validar que no sea sábado (6) ni domingo (0)
     if (dia === 0 || dia === 6) {
         errorFecha.value = true;
-        fecha.value = "";
+        horasClase.value = [];
+        toast.warning("No se puede seleccionar sábado ni domingo.");
         return;
     }
     errorFecha.value = false;
 
-    if (!fecha.value || diaCompleto.value === "") return;
+    // Verificar que se haya seleccionado si falta todo el día o no
+    if (diaCompleto.value === "") {
+        horasClase.value = [];
+        return;
+    }
+
+    // Validar que haya un correo
+    if (!correo.value) {
+        toast.error("No se encontró el correo del usuario. Por favor, inicia sesión nuevamente.");
+        return;
+    }
 
     try {
-        const profesorResponse = await axios.get(`${API}/profesores/email/${correo.value}`);
-        const id = profesorResponse.data.id;
+        const profesorResponse = await getHorarioByEmailProfesor(correo.value);
+        const id = profesorResponse.data.profesorId;
+        
+        if (!id) {
+            toast.error("No se pudo obtener la información del profesor.");
+            return;
+        }
 
+        // Convertir día de la semana (lunes=1, martes=2, ..., viernes=5)
+        // getDay() devuelve: domingo=0, lunes=1, ..., sábado=6
         const diaSemana = dia === 0 ? 7 : dia;
 
-        const horarioResponse = await axios.get(`${API}/horario/profesor/${id}/dia/${diaSemana}`);
+        const horarioResponse = await getHorarioProfesorPorDia(id, diaSemana);
         const actividades = horarioResponse.data.actividades || [];
+
+        if (actividades.length === 0) {
+            toast.info("No tienes clases ese día.");
+            horasClase.value = [];
+            return;
+        }
 
         horasClase.value = actividades.map(hora => ({
             nombre: `${hora.hora}ª Hora`,
@@ -112,17 +172,72 @@ const cargarHorasDelDia = async () => {
             aula: hora.abreviaturaAula || hora.aula,
             grupo: hora.grupo,
             seleccionada: diaCompleto.value === "true",
-            descripcion: ""
+            descripcion: "",
+            archivos: [] // Array para almacenar archivos PDF
         }));
+
+        toast.success(`Horario cargado: ${actividades.length} clase(s) encontrada(s)`);
     } catch (error) {
-        toast.error("Error al cargar el horario del día.");
+        toast.error(`Error al cargar el horario: ${error.response?.data?.message || error.message}`);
+        horasClase.value = [];
     }
 };
 
-const registrarFalta = async () => {
-    const date = new Date(fecha.value);
-    const diaSemana = date.getDay() === 0 ? 7 : date.getDay();
+// Formatear tamaño de archivo
+const formatFileSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+};
 
+// Manejar cambio de archivos
+const handleFileChange = (event, horaIndex) => {
+    const files = Array.from(event.target.files);
+    const maxFiles = 3;
+    const maxSize = 30 * 1024 * 1024; // 30MB
+
+    // Validar número de archivos
+    if (files.length > maxFiles) {
+        toast.error(`Solo puedes subir un máximo de ${maxFiles} archivos por hora`);
+        event.target.value = ''; // Limpiar input
+        return;
+    }
+
+    // Validar tamaño y tipo de cada archivo
+    const invalidFiles = files.filter(file => {
+        if (file.size > maxSize) {
+            toast.error(`El archivo "${file.name}" excede el tamaño máximo de 30MB`);
+            return true;
+        }
+        if (file.type !== 'application/pdf') {
+            toast.error(`El archivo "${file.name}" no es un PDF válido`);
+            return true;
+        }
+        return false;
+    });
+
+    if (invalidFiles.length > 0) {
+        event.target.value = ''; // Limpiar input
+        return;
+    }
+
+    // Asignar archivos válidos
+    horasClase.value[horaIndex].archivos = files;
+    toast.success(`${files.length} archivo(s) añadido(s) a ${horasClase.value[horaIndex].nombre}`);
+};
+
+// Eliminar un archivo específico
+const removeFile = (horaIndex, fileIndex) => {
+    horasClase.value[horaIndex].archivos.splice(fileIndex, 1);
+    // Limpiar el input de archivo si no quedan archivos
+    if (horasClase.value[horaIndex].archivos.length === 0 && fileInputs.value[horaIndex]) {
+        fileInputs.value[horaIndex].value = '';
+    }
+    toast.info('Archivo eliminado');
+};
+
+const registrarFalta = async () => {
+    // Filtrar horas seleccionadas
     const horasSeleccionadas = horasClase.value
         .filter(h => diaCompleto.value === "true" || h.seleccionada);
 
@@ -131,58 +246,63 @@ const registrarFalta = async () => {
         return;
     }
 
+    // Validar que todas las horas seleccionadas tengan tarea
+    const horasSinTarea = horasSeleccionadas.filter(h => !h.descripcion || h.descripcion.trim() === "");
+    
+    if (horasSinTarea.length > 0) {
+        const horasTexto = horasSinTarea.map(h => h.nombre).join(", ");
+        toast.error(`Debes especificar una tarea para: ${horasTexto}`);
+        return;
+    }
+
+    // Preparar el DTO con el nuevo formato
+    const ausenciaDTO = {
+        profesorAusenteEmail: correo.value,
+        fecha: fecha.value,
+        horas: horasSeleccionadas.map(h => ({
+            hora: parseInt(h.valor),
+            grupo: h.grupo,
+            aula: h.aula,
+            tarea: h.descripcion.trim()
+        }))
+    };
+
     try {
         cargando.value = true;
-        for (const h of horasSeleccionadas) {
-            const guardiaURL = `${API}/horario/guardia/dia/${diaSemana}/hora/${h.valor}`;
-            const guardiaResp = await axios.get(guardiaURL);
-            const profesores = guardiaResp.data.profesores || [];
-
-            if (profesores.length === 0) {
-                toast.warning(`No hay profesores en guardia para la hora ${h.valor}`);
-                continue;
+        
+        // Crear FormData para enviar archivos
+        const formData = new FormData();
+        
+        // Añadir el JSON de la ausencia
+        formData.append('ausenciaData', JSON.stringify(ausenciaDTO));
+        
+        // Añadir archivos por cada hora (si existen)
+        horasSeleccionadas.forEach((hora, index) => {
+            if (hora.archivos && hora.archivos.length > 0) {
+                hora.archivos.forEach(archivo => {
+                    formData.append(`archivos_hora_${index}`, archivo);
+                });
             }
+        });
+        
+        // Enviar ausencia con archivos al backend usando api.js
+        const response = await crearAusencia(formData);
 
-            // Determinar si es grupo conflictivo
-            const esConflictivo = h.grupo?.esProblematico === true || h.grupo?.esProblematico === 1;
-
-            // Selección basada en tipo de grupo
-            const profesorSeleccionado = profesores.reduce((menor, actual) => {
-                const metricaMenor = esConflictivo ? menor.guardiasProblematicas : menor.guardiasRealizadas;
-                const metricaActual = esConflictivo ? actual.guardiasProblematicas : actual.guardiasRealizadas;
-                return metricaActual < metricaMenor ? actual : menor;
-            });
-
-            const ausenciaDTO = {
-                profesorAusenteEmail: correo.value,
-                fecha: fecha.value,
-                hora: parseInt(h.valor),
-                tarea: h.descripcion || "No especificada",
-                profesorEnGuardiaEmail: profesorSeleccionado.email,
-                grupo: h.grupo,
-                aula: h.aula
-            };
-
-            // Guardar la ausencia
-            await axios.post("http://localhost:8081/api/ausencias", ausenciaDTO, {
-                headers: { "Content-Type": "application/json" }
-            });
-
-            // Actualizar contador según tipo de grupo
-            const endpoint = esConflictivo
-                ? "incrementar-guardia-problematica"
-                : "incrementar-guardia-normal";
-            await axios.post(`${API}/profesores/${endpoint}/${profesorSeleccionado.id}`);
+        const totalArchivos = horasSeleccionadas.reduce((acc, h) => acc + (h.archivos?.length || 0), 0);
+        if (totalArchivos > 0) {
+            toast.success(`Ausencia y ${totalArchivos} archivo(s) registrados correctamente`);
+        } else {
+            toast.success("Ausencia registrada correctamente");
         }
-
-        toast.success("Ausencia registrada correctamente");
 
         setTimeout(() => {
             limpiarFormulario();
             window.location.href = "/";
         }, 2000);
     } catch (error) {
-        toast.error(`Error al registrar la ausencia.`);
+        console.error("Error al registrar ausencia:", error);
+        const errorMsg = error.response?.data?.message || error.message || "Error desconocido";
+        toast.error(`Error al registrar la ausencia: ${errorMsg}`);
     } finally {
         cargando.value = false;
     }
@@ -193,6 +313,10 @@ const limpiarFormulario = () => {
     fecha.value = "";
     diaCompleto.value = "";
     horasClase.value = [];
+    // Limpiar inputs de archivos
+    fileInputs.value.forEach(input => {
+        if (input) input.value = '';
+    });
 };
 </script>
 
@@ -376,6 +500,90 @@ button {
     transform: translateY(-10px);
 }
 
+/* Estilos para sección de archivos */
+.archivos-section {
+    margin-top: 12px;
+    padding: 12px;
+    background: #f5f5f5;
+    border-radius: 8px;
+    border: 1px dashed #ccc;
+}
+
+.archivos-label {
+    font-size: 13px;
+    color: #555;
+    margin-bottom: 8px;
+    display: block;
+    font-weight: 500;
+}
+
+.file-input {
+    width: 100%;
+    padding: 8px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.file-input:disabled {
+    background: #e9ecef;
+    cursor: not-allowed;
+}
+
+.archivos-preview {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.archivo-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.archivo-icon {
+    font-size: 18px;
+}
+
+.archivo-nombre {
+    flex: 1;
+    color: #333;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.archivo-tamano {
+    color: #666;
+    font-size: 12px;
+}
+
+.btn-remove-file {
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    transition: background 0.2s ease;
+}
+
+.btn-remove-file:hover {
+    background: #c82333;
+}
+
 /* Responsive fino para móviles */
 @media (max-width: 480px) {
     form {
@@ -389,6 +597,10 @@ button {
 
     .toggle-group {
         flex-direction: column;
+    }
+
+    .archivo-nombre {
+        max-width: 150px;
     }
 }
 </style>

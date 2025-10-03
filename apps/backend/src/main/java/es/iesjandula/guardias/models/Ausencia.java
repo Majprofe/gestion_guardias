@@ -6,28 +6,29 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import io.swagger.v3.oas.annotations.media.Schema;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Entidad que representa una ausencia de un profesor.
- * Una ausencia corresponde a una hora específica con su correspondiente cobertura.
+ * Entidad que representa una ausencia de un profesor en un día específico.
+ * Una ausencia puede contener múltiples horas con sus respectivas tareas y coberturas.
  */
 @Entity
 @Table(name = "ausencias", 
        indexes = {
-           @Index(name = "idx_ausencia_profesor_fecha", columnList = "profesorAusenteEmail, fecha"),
-           @Index(name = "idx_ausencia_fecha_hora", columnList = "fecha, hora")
+           @Index(name = "idx_ausencia_profesor_fecha", columnList = "profesorAusenteEmail, fecha")
        },
        uniqueConstraints = {
-           @UniqueConstraint(name = "uk_ausencia_profesor_fecha_hora", 
-                           columnNames = {"profesorAusenteEmail", "fecha", "hora"})
+           @UniqueConstraint(name = "uk_ausencia_profesor_fecha", 
+                           columnNames = {"profesorAusenteEmail", "fecha"})
        })
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-@Schema(description = "Entidad que representa una ausencia de un profesor")
+@Schema(description = "Entidad que representa una ausencia de un profesor en un día específico")
 public class Ausencia {
 
     @Id
@@ -43,42 +44,31 @@ public class Ausencia {
 
     @NotNull(message = "La fecha es obligatoria")
     @Column(nullable = false)
-    @Schema(description = "Fecha de la ausencia", example = "2025-08-21")
+    @Schema(description = "Fecha de la ausencia", example = "2025-10-09")
     private LocalDate fecha;
 
-    @NotBlank(message = "El grupo es obligatorio")
-    @Size(max = 10, message = "El grupo no puede tener más de 10 caracteres")
-    @Column(length = 10)
-    @Schema(description = "Grupo afectado por la ausencia", example = "1DAW")
-    private String grupo;
-    
-    @NotBlank(message = "El aula es obligatoria")
-    @Size(max = 20, message = "El aula no puede tener más de 20 caracteres")
-    @Column(length = 20)
-    @Schema(description = "Aula donde se produce la ausencia", example = "A101")
-    private String aula;
+    @OneToMany(mappedBy = "ausencia", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @JsonManagedReference
+    @Schema(description = "Horas específicas de la ausencia con sus tareas y coberturas")
+    private List<HoraAusencia> horas = new ArrayList<>();
 
-    @NotNull(message = "La hora es obligatoria")
-    @Min(value = 1, message = "La hora debe ser mayor a 0")
-    @Max(value = 8, message = "La hora debe ser menor o igual a 8")
-    @Column(nullable = false)
-    @Schema(description = "Hora de la ausencia (1-8)", example = "3")
-    private Integer hora;
+    @OneToMany(mappedBy = "ausencia", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @Schema(description = "Archivos adjuntos a esta ausencia (comunes para todas las horas)")
+    private List<ArchivoAusencia> archivos = new ArrayList<>();
 
-    @Size(max = 500, message = "La tarea no puede tener más de 500 caracteres")
-    @Column(length = 500)
-    @Schema(description = "Tarea asignada durante la ausencia", example = "Ejercicios página 25-30")
-    private String tarea;
+    /**
+     * Método helper para añadir una hora de ausencia
+     */
+    public void addHoraAusencia(HoraAusencia horaAusencia) {
+        horas.add(horaAusencia);
+        horaAusencia.setAusencia(this);
+    }
 
-    @Column(columnDefinition = "TEXT")
-    @Schema(description = "Tareas obligatorias detalladas para los alumnos durante la ausencia")
-    private String tareasObligatorias;
-
-    @OneToOne(mappedBy = "ausencia", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @Schema(description = "Cobertura asociada a esta ausencia")
-    private Cobertura cobertura;
-
-    @OneToMany(mappedBy = "ausencia", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @Schema(description = "Archivos adjuntos a esta ausencia")
-    private List<ArchivoAusencia> archivos;
+    /**
+     * Método helper para añadir un archivo
+     */
+    public void addArchivo(ArchivoAusencia archivo) {
+        archivos.add(archivo);
+        archivo.setAusencia(this);
+    }
 }

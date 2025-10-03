@@ -14,9 +14,14 @@ import java.util.Optional;
 public interface AusenciaRepository extends JpaRepository<Ausencia, Long> {
 
     /**
-     * Verifica si existe una ausencia para un profesor en una fecha y hora específica
+     * Verifica si existe una ausencia para un profesor en una fecha específica
      */
-    boolean existsByProfesorAusenteEmailAndFechaAndHora(String email, LocalDate fecha, Integer hora);
+    boolean existsByProfesorAusenteEmailAndFecha(String email, LocalDate fecha);
+    
+    /**
+     * Busca una ausencia específica por profesor y fecha
+     */
+    Optional<Ausencia> findByProfesorAusenteEmailAndFecha(String email, LocalDate fecha);
     
     /**
      * Busca ausencias por fecha (devuelve Optional para manejar casos vacíos)
@@ -29,21 +34,16 @@ public interface AusenciaRepository extends JpaRepository<Ausencia, Long> {
     List<Ausencia> findByFecha(LocalDate fecha);
     
     /**
-     * Busca ausencias específicas por fecha, hora y profesor
-     */
-    List<Ausencia> findByFechaAndHoraAndProfesorAusenteEmail(LocalDate fecha, Integer hora, String email);
-    
-    /**
      * Busca todas las ausencias de un profesor (case-insensitive)
      * Optimizada para usar índice de base de datos con LOWER
      */
-    @Query("SELECT a FROM Ausencia a WHERE LOWER(a.profesorAusenteEmail) = LOWER(:email) ORDER BY a.fecha DESC, a.hora ASC")
+    @Query("SELECT a FROM Ausencia a WHERE LOWER(a.profesorAusenteEmail) = LOWER(:email) ORDER BY a.fecha DESC")
     List<Ausencia> findAllByProfesorAusenteEmail(@Param("email") String email);
     
     /**
      * Busca ausencias en un rango de fechas para estadísticas
      */
-    @Query("SELECT a FROM Ausencia a WHERE a.fecha BETWEEN :fechaInicio AND :fechaFin ORDER BY a.fecha ASC, a.hora ASC")
+    @Query("SELECT a FROM Ausencia a WHERE a.fecha BETWEEN :fechaInicio AND :fechaFin ORDER BY a.fecha ASC")
     List<Ausencia> findByFechaBetween(@Param("fechaInicio") LocalDate fechaInicio, 
                                      @Param("fechaFin") LocalDate fechaFin);
     
@@ -54,11 +54,4 @@ public interface AusenciaRepository extends JpaRepository<Ausencia, Long> {
     Long countByProfesorAndFechaBetween(@Param("email") String email, 
                                        @Param("fechaInicio") LocalDate fechaInicio, 
                                        @Param("fechaFin") LocalDate fechaFin);
-
-    /**
-     * Busca ausencias sin cobertura asignada para una fecha específica
-     */
-    @Query("SELECT a FROM Ausencia a WHERE a.fecha = :fecha AND a.id NOT IN " +
-           "(SELECT c.ausencia.id FROM Cobertura c WHERE c.ausencia.fecha = :fecha)")
-    List<Ausencia> findSinCoberturaByFecha(@Param("fecha") LocalDate fecha);
 }

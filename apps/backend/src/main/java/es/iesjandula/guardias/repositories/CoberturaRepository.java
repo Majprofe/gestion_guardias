@@ -16,26 +16,34 @@ import java.util.Optional;
 
 @Repository
 public interface CoberturaRepository extends JpaRepository<Cobertura, Long> {
-    Optional<Cobertura> findByAusenciaId(Long ausenciaId);
+    
+    // Métodos actualizados para usar horaAusencia
+    Optional<Cobertura> findByHoraAusenciaId(Long horaAusenciaId);
 
     @Query("SELECT c FROM Cobertura c WHERE LOWER(c.profesorCubreEmail) = LOWER(:email)")
     List<Cobertura> findAllByProfesorCubreEmail(@Param("email") String email);
 
-    boolean existsByProfesorCubreEmailAndAusenciaFechaAndAusenciaHora(
-            String email, LocalDate fecha, Integer hora
+    @Query("SELECT CASE WHEN COUNT(c) > 0 THEN true ELSE false END FROM Cobertura c " +
+           "JOIN c.horaAusencia ha JOIN ha.ausencia a " +
+           "WHERE LOWER(c.profesorCubreEmail) = LOWER(:email) AND a.fecha = :fecha AND ha.hora = :hora")
+    boolean existsByProfesorCubreEmailAndFechaAndHora(
+            @Param("email") String email, 
+            @Param("fecha") LocalDate fecha, 
+            @Param("hora") Integer hora
     );
 
     @Modifying
     @Transactional
-    @Query("DELETE FROM Cobertura c WHERE c.ausencia.id = :ausenciaId")
-    void deleteByAusenciaId(@Param("ausenciaId") Long ausenciaId);
+    @Query("DELETE FROM Cobertura c WHERE c.horaAusencia.id = :horaAusenciaId")
+    void deleteByHoraAusenciaId(@Param("horaAusenciaId") Long horaAusenciaId);
 
     /**
-     * Busca coberturas por fecha de ausencia y estado
+     * Busca coberturas por fecha y estado
      */
-    @Query("SELECT c FROM Cobertura c WHERE c.ausencia.fecha = :fecha AND c.estado = :estado")
-    List<Cobertura> findByAusenciaFechaAndEstado(@Param("fecha") LocalDate fecha, 
-                                                @Param("estado") EstadoCobertura estado);
+    @Query("SELECT c FROM Cobertura c JOIN c.horaAusencia ha JOIN ha.ausencia a " +
+           "WHERE a.fecha = :fecha AND c.estado = :estado")
+    List<Cobertura> findByFechaAndEstado(@Param("fecha") LocalDate fecha, 
+                                         @Param("estado") EstadoCobertura estado);
 
     /**
      * Busca coberturas de un profesor específico y estado
@@ -45,9 +53,9 @@ public interface CoberturaRepository extends JpaRepository<Cobertura, Long> {
                                                      @Param("estado") EstadoCobertura estado);
 
     /**
-     * Busca coberturas por fecha de ausencia (sin filtro de estado)
+     * Busca coberturas por fecha (sin filtro de estado)
      */
-    @Query("SELECT c FROM Cobertura c WHERE c.ausencia.fecha = :fecha")
-    List<Cobertura> findByAusenciaFecha(@Param("fecha") LocalDate fecha);
+    @Query("SELECT c FROM Cobertura c JOIN c.horaAusencia ha JOIN ha.ausencia a WHERE a.fecha = :fecha")
+    List<Cobertura> findByFecha(@Param("fecha") LocalDate fecha);
 
 }

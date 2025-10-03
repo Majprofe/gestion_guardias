@@ -19,9 +19,9 @@ public class Cobertura {
     private Long id;
 
     @OneToOne(optional = false)
-    @JoinColumn(name = "ausencia_id", nullable = false, unique = true)
-    @Schema(description = "Ausencia que cubre esta cobertura")
-    private Ausencia ausencia;
+    @JoinColumn(name = "hora_ausencia_id", nullable = false, unique = true)
+    @Schema(description = "Hora de ausencia que cubre esta cobertura")
+    private HoraAusencia horaAusencia;
 
     @Schema(description = "Email del profesor que cubre la ausencia", example = "profesor.guardia@instituto.edu")
     private String profesorCubreEmail;

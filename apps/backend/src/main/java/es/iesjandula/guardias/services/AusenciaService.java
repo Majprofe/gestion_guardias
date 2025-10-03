@@ -1,8 +1,13 @@
 package es.iesjandula.guardias.services;
 
 import es.iesjandula.guardias.dto.AusenciaConGuardiasDTO;
+import es.iesjandula.guardias.dto.AusenciaResponseDTO;
+import es.iesjandula.guardias.dto.ArchivoDTO;
+import es.iesjandula.guardias.dto.CoberturaDTO;
 import es.iesjandula.guardias.dto.CrearAusenciaDTO;
 import es.iesjandula.guardias.dto.CrearAusenciaMultipleDTO;
+import es.iesjandula.guardias.dto.HoraAusenciaDTO;
+import es.iesjandula.guardias.dto.HoraAusenciaConCoberturaDTO;
 import es.iesjandula.guardias.exception.BusinessException;
 import es.iesjandula.guardias.exception.ResourceNotFoundException;
 import es.iesjandula.guardias.models.*;
@@ -12,6 +17,7 @@ import es.iesjandula.guardias.repositories.CoberturaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,336 +37,19 @@ public class AusenciaService {
     private CoberturaRepository coberturaRepository;
 
     @Autowired
-    private AsignacionGuardiasService asignacionGuardiasService;
+    private FileStorageService fileStorageService;
 
-    /**
-     * Guarda una nueva ausencia y asigna una cobertura con el profesor en guardia proporcionado.
-     * El ID se genera automáticamente por la base de datos.
-     *
-     * @param crearDto Objeto que contiene los detalles de la ausencia SIN ID.
-     * @return AusenciaConGuardiasDTO con el ID generado.
-     * @throws BusinessException Si la ausencia ya existe para el profesor en la misma fecha y hora.
-     */
-    public AusenciaConGuardiasDTO guardarYAsignarCobertura(CrearAusenciaDTO crearDto) {
-        logger.debug("Intentando guardar ausencia: {}", crearDto);
+    @Autowired
+    private es.iesjandula.guardias.repositories.ArchivoHoraAusenciaRepository archivoRepository;
 
-        if (ausenciaRepository.existsByProfesorAusenteEmailAndFechaAndHora(
-                crearDto.getProfesorAusenteEmail(), crearDto.getFecha(), crearDto.getHora())) {
-            logger.warn("La ausencia ya existe para el profesor {} en fecha {} y hora {}",
-                    crearDto.getProfesorAusenteEmail(), crearDto.getFecha(), crearDto.getHora());
-            throw new BusinessException(
-                "Ya existe una ausencia registrada para el profesor " + crearDto.getProfesorAusenteEmail() + 
-                " en la fecha " + crearDto.getFecha() + " y hora " + crearDto.getHora(),
-                HttpStatus.CONFLICT
-            );
-        }
-
-        // Crear ausencia (SIN asignar ID - se genera automáticamente)
-        Ausencia ausencia = new Ausencia();
-        ausencia.setProfesorAusenteEmail(crearDto.getProfesorAusenteEmail());
-        ausencia.setFecha(crearDto.getFecha());
-        ausencia.setHora(crearDto.getHora());
-        ausencia.setTarea(crearDto.getTarea());
-        ausencia.setGrupo(crearDto.getGrupo());
-        ausencia.setAula(crearDto.getAula());
-
-        // Guardar en BD - aquí se genera el ID automáticamente
-        ausencia = ausenciaRepository.save(ausencia);
-        logger.info("Ausencia guardada con ID generado automáticamente: {}", ausencia.getId());
-
-        // **NUEVA FUNCIONALIDAD: Redistribución automática**
-        // El sistema redistribuye automáticamente todas las coberturas del día
-        // para optimizar la distribución equitativa
-        try {
-            asignacionGuardiasService.redistribuirCoberturasPorNuevaAusencia(ausencia);
-            logger.info("Redistribución automática completada para ausencia ID: {}", ausencia.getId());
-        } catch (Exception e) {
-            logger.error("Error en redistribución automática para ausencia ID {}: {}", 
-                        ausencia.getId(), e.getMessage());
-            // Continúa con el flujo manual como fallback
-        }
-
-        // **MANTENER COMPATIBILIDAD**: Si se especifica profesor manualmente, 
-        // sobrescribir la asignación automática
-        if (crearDto.getProfesorEnGuardiaEmail() != null && !crearDto.getProfesorEnGuardiaEmail().isBlank()) {
-            // Eliminar cobertura automática si existe
-            coberturaRepository.findByAusenciaId(ausencia.getId())
-                .ifPresent(coberturaExistente -> {
-                    coberturaRepository.delete(coberturaExistente);
-                    logger.info("Cobertura automática eliminada para asignación manual");
-                });
-            
-            // Crear cobertura manual
-            Cobertura coberturaManual = new Cobertura();
-            coberturaManual.setAusencia(ausencia);
-            coberturaManual.setProfesorCubreEmail(crearDto.getProfesorEnGuardiaEmail());
-            coberturaManual.setGrupo(crearDto.getGrupo());
-            coberturaManual.setAula(crearDto.getAula());
-            // Estado por defecto (ASIGNADA) - el admin puede validarla después
-
-            coberturaRepository.save(coberturaManual);
-            logger.info("Cobertura manual creada para la ausencia con ID {} por el profesor {}", 
-                       ausencia.getId(), crearDto.getProfesorEnGuardiaEmail());
-        } else {
-            logger.info("Ausencia procesada con asignación automática para ID {}", ausencia.getId());
-        }
-
-        // Convertir a DTO de respuesta (con ID)
-        return convertirAusenciaADTO(ausencia);
-    }
-
-    /**
-     * Guarda múltiples ausencias para un día y asigna coberturas automáticamente.
-     * 
-     * @param crearDto DTO con los datos de las ausencias múltiples.
-     * @return Lista de AusenciaConGuardiasDTO con los IDs generados.
-     * @throws BusinessException Si alguna de las ausencias ya existe.
-     */
-    public List<AusenciaConGuardiasDTO> guardarYAsignarCoberturaMultiple(CrearAusenciaMultipleDTO crearDto) {
-        logger.debug("Intentando guardar ausencias múltiples: {}", crearDto);
-
-        List<AusenciaConGuardiasDTO> resultados = new ArrayList<>();
-        
-        // Verificar si ya existen ausencias para las horas especificadas
-        for (CrearAusenciaMultipleDTO.HoraAusenciaDTO horaDto : crearDto.getHoras()) {
-            if (ausenciaRepository.existsByProfesorAusenteEmailAndFechaAndHora(
-                    crearDto.getProfesorAusenteEmail(), crearDto.getFecha(), horaDto.getHora())) {
-                logger.warn("La ausencia ya existe para el profesor {} en fecha {} y hora {}",
-                        crearDto.getProfesorAusenteEmail(), crearDto.getFecha(), horaDto.getHora());
-                throw new BusinessException(
-                    "Ya existe una ausencia registrada para el profesor " + crearDto.getProfesorAusenteEmail() + 
-                    " en la fecha " + crearDto.getFecha() + " y hora " + horaDto.getHora(),
-                    HttpStatus.CONFLICT
-                );
-            }
-        }
-
-        // Crear todas las ausencias
-        for (CrearAusenciaMultipleDTO.HoraAusenciaDTO horaDto : crearDto.getHoras()) {
-            Ausencia ausencia = new Ausencia();
-            ausencia.setProfesorAusenteEmail(crearDto.getProfesorAusenteEmail());
-            ausencia.setFecha(crearDto.getFecha());
-            ausencia.setHora(horaDto.getHora());
-            ausencia.setTarea(horaDto.getTarea());
-            ausencia.setGrupo(horaDto.getGrupo());
-            ausencia.setAula(horaDto.getAula());
-
-            // Guardar en BD
-            ausencia = ausenciaRepository.save(ausencia);
-            logger.info("Ausencia guardada con ID generado automáticamente: {}", ausencia.getId());
-
-            // Convertir a DTO y agregar a resultados
-            resultados.add(convertirAusenciaADTO(ausencia));
-        }
-
-        // Redistribución automática para todas las ausencias del día
-        try {
-            // Redistribuir todas las coberturas del día considerando las nuevas ausencias
-            for (AusenciaConGuardiasDTO ausenciaDto : resultados) {
-                Ausencia ausencia = ausenciaRepository.findById(ausenciaDto.getId()).orElse(null);
-                if (ausencia != null) {
-                    asignacionGuardiasService.redistribuirCoberturasPorNuevaAusencia(ausencia);
-                }
-            }
-            logger.info("Redistribución automática completada para {} ausencias en fecha {}", 
-                       resultados.size(), crearDto.getFecha());
-        } catch (Exception e) {
-            logger.error("Error en redistribución automática para ausencias múltiples en fecha {}: {}", 
-                        crearDto.getFecha(), e.getMessage());
-        }
-
-        return resultados;
-    }
-
-    /**
-     * Convierte una entidad Ausencia a un DTO de respuesta AusenciaConGuardiasDTO.
-     * Este método incluye la información de cobertura si existe.
-     *
-     * @param ausencia La entidad Ausencia a convertir.
-     * @return El DTO de respuesta con toda la información de la ausencia y cobertura.
-     */
-    private AusenciaConGuardiasDTO convertirAusenciaADTO(Ausencia ausencia) {
-        AusenciaConGuardiasDTO dto = new AusenciaConGuardiasDTO();
-        dto.setId(ausencia.getId());
-        dto.setFecha(ausencia.getFecha());
-        dto.setHora(ausencia.getHora());
-        dto.setProfesorAusenteEmail(ausencia.getProfesorAusenteEmail());
-        dto.setTarea(ausencia.getTarea());
-        dto.setGrupo(ausencia.getGrupo());
-        dto.setAula(ausencia.getAula());
-        
-        // Incluir información de cobertura si existe
-        if (ausencia.getCobertura() != null) {
-            dto.setProfesorEnGuardiaEmail(ausencia.getCobertura().getProfesorCubreEmail());
-        }
-        
-        return dto;
-    }
-
-    /**
-     * Lista las ausencias para una fecha y hora específicas.
-     *
-     * @param fecha La fecha de las ausencias a buscar.
-     * @param hora La hora de las ausencias a buscar.
-     * @return Una lista de ausencias que coinciden con la fecha y hora proporcionadas.
-     */
-    public Optional<List<Ausencia>> listarPorFechaHora(LocalDate fecha, Integer hora) {
-        logger.debug("Buscando ausencias para fecha {} y hora {}", fecha, hora);
-        Optional<List<Ausencia>> faltasDia = ausenciaRepository.findAusenciaByFecha(fecha);
-        if (faltasDia.isPresent()) {
-            List<Ausencia> coincidencias = faltasDia.get().stream()
-                    .filter(ausencia -> ausencia.getHora().equals(hora))
-                    .collect(Collectors.toList());
-
-            logger.info("Encontradas {} ausencias para la hora {}", coincidencias.size(), hora);
-            return coincidencias.isEmpty() ? Optional.empty() : Optional.of(coincidencias);
-        } else {
-            logger.info("No se encontraron ausencias para la fecha {}", fecha);
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * Lista las ausencias para una fecha específica, agrupadas por hora.
-     *
-     * @param fecha La fecha de las ausencias a buscar.
-     * @return Un mapa que agrupa las ausencias por hora.
-     */
-    public Map<String, List<AusenciaConGuardiasDTO>> listarAusenciasPorFechaAgrupadasPorHora(LocalDate fecha) {
-        logger.debug("Listando ausencias agrupadas por hora para la fecha {}", fecha);
-        List<Ausencia> ausencias = ausenciaRepository.findByFecha(fecha);
-
-        Map<String, List<AusenciaConGuardiasDTO>> ausenciasPorHora = new TreeMap<>(Comparator.comparingInt(Integer::parseInt));
-
-        for (Ausencia ausencia : ausencias) {
-            String hora = String.valueOf(ausencia.getHora());
-
-            String profesorCubreEmail = ausencia.getCobertura() != null
-                    ? ausencia.getCobertura().getProfesorCubreEmail()
-                    : null;
-
-            AusenciaConGuardiasDTO dto = new AusenciaConGuardiasDTO();
-            dto.setId(ausencia.getId());
-            dto.setFecha(ausencia.getFecha());
-            dto.setHora(ausencia.getHora());
-            dto.setProfesorAusenteEmail(ausencia.getProfesorAusenteEmail());
-            dto.setTarea(ausencia.getTarea());
-            dto.setProfesorEnGuardiaEmail(profesorCubreEmail);
-            dto.setGrupo(ausencia.getGrupo());
-            dto.setAula(ausencia.getAula());
-
-            ausenciasPorHora.computeIfAbsent(hora, k -> new ArrayList<>()).add(dto);
-        }
-
-        logger.info("Total de horas con ausencias encontradas: {}", ausenciasPorHora.size());
-        return ausenciasPorHora;
-    }
-
-    /**
-     * Genera un histórico completo de todas las ausencias registradas.
-     *
-     * @return Un mapa que agrupa las ausencias por fecha y hora.
-     */
-    public Map<LocalDate, Map<String, List<AusenciaConGuardiasDTO>>> historicoFaltas() {
-        logger.debug("Generando histórico completo de faltas");
-        List<Ausencia> ausenciasTodas = ausenciaRepository.findAll();
-        Map<LocalDate, Map<String, List<AusenciaConGuardiasDTO>>> historico = new TreeMap<>();
-
-        for (Ausencia ausencia : ausenciasTodas) {
-            LocalDate fecha = ausencia.getFecha();
-            String hora = String.valueOf(ausencia.getHora());
-
-            String profesorCubreEmail = ausencia.getCobertura() != null
-                    ? ausencia.getCobertura().getProfesorCubreEmail()
-                    : null;
-
-            AusenciaConGuardiasDTO dto = new AusenciaConGuardiasDTO();
-            dto.setId(ausencia.getId());
-            dto.setFecha(fecha);
-            dto.setHora(ausencia.getHora());
-            dto.setProfesorAusenteEmail(ausencia.getProfesorAusenteEmail());
-            dto.setTarea(ausencia.getTarea());
-            dto.setProfesorEnGuardiaEmail(profesorCubreEmail);
-            dto.setAula(ausencia.getAula());
-            dto.setGrupo(ausencia.getGrupo());
-            historico
-                    .computeIfAbsent(fecha, k -> new TreeMap<>(Comparator.comparingInt(Integer::parseInt)))
-                    .computeIfAbsent(hora, k -> new ArrayList<>())
-                    .add(dto);
-        }
-
-        logger.info("Histórico generado con {} fechas distintas", historico.size());
-        return historico;
-    }
-
-
-    /**
-     * Genera un histórico de las ausencias de un profesor específico.
-     *
-     * @param emailProfesor El email del profesor para el que se busca el histórico.
-     * @return Un mapa que agrupa las ausencias del profesor por fecha y hora.
-     */
-    public Map<LocalDate, Map<String, List<AusenciaConGuardiasDTO>>> historicoFaltasPorProfesor(String emailProfesor) {
-        logger.debug("Generando histórico de faltas para el profesor {}", emailProfesor);
-        List<Ausencia> ausenciasProfesor = ausenciaRepository.findAllByProfesorAusenteEmail(emailProfesor);
-        Map<LocalDate, Map<String, List<AusenciaConGuardiasDTO>>> historico = new TreeMap<>();
-
-        for (Ausencia ausencia : ausenciasProfesor) {
-            LocalDate fecha = ausencia.getFecha();
-            String hora = String.valueOf(ausencia.getHora());
-
-            String profesorCubreEmail = ausencia.getCobertura() != null
-                    ? ausencia.getCobertura().getProfesorCubreEmail()
-                    : null;
-
-            AusenciaConGuardiasDTO dto = new AusenciaConGuardiasDTO();
-            dto.setId(ausencia.getId());
-            dto.setFecha(fecha);
-            dto.setHora(ausencia.getHora());
-            dto.setProfesorAusenteEmail(ausencia.getProfesorAusenteEmail());
-            dto.setTarea(ausencia.getTarea());
-            dto.setProfesorEnGuardiaEmail(profesorCubreEmail);
-
-            historico
-                    .computeIfAbsent(fecha, k -> new TreeMap<>(Comparator.comparingInt(Integer::parseInt)))
-                    .computeIfAbsent(hora, k -> new ArrayList<>())
-                    .add(dto);
-        }
-
-        logger.info("Histórico para profesor {} generado con {} fechas distintas", emailProfesor, historico.size());
-        return historico;
-    }
-
-    /**
-     * Obtiene las ausencias de un profesor específico.
-     *
-     * @param email El email del profesor cuyas ausencias se desean obtener.
-     * @return Una lista de objetos {@link AusenciaConGuardiasDTO} que contienen los detalles de las ausencias del profesor.
-     */
-    public List<AusenciaConGuardiasDTO> obtenerAusenciasPorProfesor(String email) {
-        logger.debug("Obteniendo ausencias para el profesor {}", email);
-        List<Ausencia> ausencias = ausenciaRepository.findAllByProfesorAusenteEmail(email);
-
-        List<AusenciaConGuardiasDTO> resultado = ausencias.stream()
-                .map(a -> {
-                    AusenciaConGuardiasDTO dto = new AusenciaConGuardiasDTO();
-                    dto.setId(a.getId());
-                    dto.setFecha(a.getFecha());
-                    dto.setHora(a.getHora());
-                    dto.setProfesorAusenteEmail(a.getProfesorAusenteEmail());
-                    dto.setTarea(a.getTarea());
-                    dto.setAula(a.getAula());
-                    dto.setGrupo(a.getGrupo());
-                    if (a.getCobertura() != null) {
-                        dto.setProfesorEnGuardiaEmail(a.getCobertura().getProfesorCubreEmail());
-                    }
-                    return dto;
-                })
-                .collect(Collectors.toList());
-
-        logger.info("Total de ausencias encontradas para el profesor {}: {}", email, resultado.size());
-        return resultado;
-    }
+    // Métodos del modelo viejo comentados temporalmente - serán migrados después
+    // public AusenciaConGuardiasDTO guardarYAsignarCobertura(CrearAusenciaDTO crearDto) {...}
+    // public List<AusenciaConGuardiasDTO> guardarYAsignarCoberturaMultiple(CrearAusenciaMultipleDTO crearDto) {...}
+    // public Optional<List<Ausencia>> listarPorFechaHora(LocalDate fecha, Integer hora) {...}
+    // public Map<String, List<AusenciaConGuardiasDTO>> listarAusenciasPorFechaAgrupadasPorHora(LocalDate fecha) {...}
+    // public Map<LocalDate, Map<String, List<AusenciaConGuardiasDTO>>> historicoFaltas() {...}
+    // public Map<LocalDate, Map<String, List<AusenciaConGuardiasDTO>>> historicoFaltasPorProfesor(String emailProfesor) {...}
+    // public List<AusenciaConGuardiasDTO> obtenerAusenciasPorProfesor(String email) {...}
 
     public void eliminarPorId(Long id) {
         if (!ausenciaRepository.existsById(id)) {
@@ -368,6 +57,281 @@ public class AusenciaService {
         }
         ausenciaRepository.deleteById(id);
         logger.info("Ausencia con ID {} eliminada correctamente", id);
+    }
+
+    /**
+     * Crea una ausencia con múltiples horas.
+     * Este método maneja el nuevo formato donde una ausencia representa un día completo
+     * con múltiples horas afectadas.
+     *
+     * @param crearDto DTO con los datos de la ausencia y las horas afectadas.
+     * @return AusenciaResponseDTO con la ausencia creada y sus horas.
+     * @throws BusinessException Si ya existe una ausencia para el profesor en la fecha especificada.
+     */
+    public AusenciaResponseDTO crearAusenciaConCoberturas(CrearAusenciaDTO crearDto) {
+        logger.debug("Creando ausencia: {}", crearDto);
+
+        // Verificar que no exista ya una ausencia para este profesor en esta fecha
+        if (ausenciaRepository.existsByProfesorAusenteEmailAndFecha(
+                crearDto.getProfesorAusenteEmail(), crearDto.getFecha())) {
+            logger.warn("Ya existe una ausencia para el profesor {} en la fecha {}",
+                    crearDto.getProfesorAusenteEmail(), crearDto.getFecha());
+            throw new BusinessException(
+                "Ya existe una ausencia registrada para el profesor " + crearDto.getProfesorAusenteEmail() + 
+                " en la fecha " + crearDto.getFecha(),
+                HttpStatus.CONFLICT
+            );
+        }
+
+        // Crear la ausencia principal (nivel día)
+        Ausencia ausencia = new Ausencia();
+        ausencia.setProfesorAusenteEmail(crearDto.getProfesorAusenteEmail());
+        ausencia.setFecha(crearDto.getFecha());
+
+        // Crear las horas de ausencia
+        List<HoraAusenciaConCoberturaDTO> horasConCobertura = new ArrayList<>();
+        
+        for (es.iesjandula.guardias.dto.HoraAusenciaDTO horaDto : crearDto.getHoras()) {
+            // Crear HoraAusencia
+            HoraAusencia horaAusencia = new HoraAusencia();
+            horaAusencia.setHora(horaDto.getHora());
+            horaAusencia.setGrupo(horaDto.getGrupo());
+            horaAusencia.setAula(horaDto.getAula());
+            horaAusencia.setTarea(horaDto.getTarea());
+
+            // Agregar a la ausencia usando el helper method
+            ausencia.addHoraAusencia(horaAusencia);
+
+            // Crear DTO de respuesta para esta hora
+            HoraAusenciaConCoberturaDTO horaConCoberturaDto = new HoraAusenciaConCoberturaDTO();
+            horaConCoberturaDto.setHora(horaAusencia.getHora());
+            horaConCoberturaDto.setGrupo(horaAusencia.getGrupo());
+            horaConCoberturaDto.setAula(horaAusencia.getAula());
+            horaConCoberturaDto.setTarea(horaAusencia.getTarea());
+            horaConCoberturaDto.setCobertura(null); // Por ahora sin cobertura automática
+
+            horasConCobertura.add(horaConCoberturaDto);
+        }
+
+        // Guardar la ausencia con todas sus horas (cascade ALL)
+        ausencia = ausenciaRepository.save(ausencia);
+        logger.info("Ausencia creada con ID: {} y {} horas", ausencia.getId(), ausencia.getHoras().size());
+
+        // Actualizar los IDs en los DTOs
+        for (int i = 0; i < ausencia.getHoras().size(); i++) {
+            horasConCobertura.get(i).setId(ausencia.getHoras().get(i).getId());
+        }
+
+        // Crear DTO de respuesta
+        AusenciaResponseDTO responseDto = new AusenciaResponseDTO();
+        responseDto.setId(ausencia.getId());
+        responseDto.setProfesorAusenteEmail(ausencia.getProfesorAusenteEmail());
+        responseDto.setFecha(ausencia.getFecha());
+        responseDto.setHoras(horasConCobertura);
+
+        logger.info("Ausencia creada exitosamente con {} horas", horasConCobertura.size());
+        return responseDto;
+    }
+
+    /**
+     * Crea una ausencia con múltiples horas Y archivos asociados
+     * 
+     * @param crearDto DTO con los datos de la ausencia
+     * @param archivos Mapa con archivos por hora: key=índice_hora (0,1,2...), value=array de archivos
+     * @return AusenciaResponseDTO con la ausencia creada, sus horas y archivos
+     */
+    public AusenciaResponseDTO crearAusenciaConArchivos(CrearAusenciaDTO crearDto, 
+                                                         Map<Integer, MultipartFile[]> archivos) {
+        logger.debug("Creando ausencia con archivos: {}", crearDto);
+
+        // Validar límite de archivos por hora
+        for (Map.Entry<Integer, MultipartFile[]> entry : archivos.entrySet()) {
+            if (entry.getValue() != null && entry.getValue().length > FileStorageService.MAX_FILES_PER_HORA) {
+                throw new BusinessException(
+                    String.format("La hora %d excede el límite de %d archivos por hora", 
+                        entry.getKey() + 1, FileStorageService.MAX_FILES_PER_HORA),
+                    HttpStatus.BAD_REQUEST
+                );
+            }
+        }
+
+        // Verificar que no exista ya una ausencia para este profesor en esta fecha
+        if (ausenciaRepository.existsByProfesorAusenteEmailAndFecha(
+                crearDto.getProfesorAusenteEmail(), crearDto.getFecha())) {
+            throw new BusinessException(
+                "Ya existe una ausencia registrada para el profesor " + crearDto.getProfesorAusenteEmail() + 
+                " en la fecha " + crearDto.getFecha(),
+                HttpStatus.CONFLICT
+            );
+        }
+
+        // Crear la ausencia principal
+        Ausencia ausencia = new Ausencia();
+        ausencia.setProfesorAusenteEmail(crearDto.getProfesorAusenteEmail());
+        ausencia.setFecha(crearDto.getFecha());
+
+        // Guardar primero la ausencia para obtener su ID
+        ausencia = ausenciaRepository.save(ausencia);
+        logger.info("Ausencia creada con ID: {}", ausencia.getId());
+
+        List<HoraAusenciaConCoberturaDTO> horasConCobertura = new ArrayList<>();
+        
+        // Crear las horas de ausencia y procesar archivos
+        for (int i = 0; i < crearDto.getHoras().size(); i++) {
+            es.iesjandula.guardias.dto.HoraAusenciaDTO horaDto = crearDto.getHoras().get(i);
+            
+            // Crear HoraAusencia
+            HoraAusencia horaAusencia = new HoraAusencia();
+            horaAusencia.setHora(horaDto.getHora());
+            horaAusencia.setGrupo(horaDto.getGrupo());
+            horaAusencia.setAula(horaDto.getAula());
+            horaAusencia.setTarea(horaDto.getTarea());
+            
+            // Agregar a la ausencia
+            ausencia.addHoraAusencia(horaAusencia);
+        }
+        
+        // Guardar la ausencia con todas sus horas
+        ausencia = ausenciaRepository.save(ausencia);
+        
+        // Ahora procesar archivos para cada hora
+        for (int i = 0; i < ausencia.getHoras().size(); i++) {
+            HoraAusencia horaAusencia = ausencia.getHoras().get(i);
+            List<ArchivoDTO> archivosDto = new ArrayList<>();
+            
+            // Si hay archivos para esta hora
+            MultipartFile[] archivosHora = archivos.get(i);
+            if (archivosHora != null && archivosHora.length > 0) {
+                for (MultipartFile archivo : archivosHora) {
+                    if (archivo != null && !archivo.isEmpty()) {
+                        // Guardar archivo físicamente
+                        String[] archivoInfo = fileStorageService.storeFile(
+                            archivo, ausencia.getId(), horaAusencia.getId()
+                        );
+                        
+                        // Crear registro en BD
+                        ArchivoHoraAusencia archivoEntity = new ArchivoHoraAusencia(
+                            horaAusencia,
+                            archivo.getOriginalFilename(),
+                            archivoInfo[1], // nombreAlmacenado
+                            archivoInfo[0], // rutaArchivo
+                            archivo.getContentType(),
+                            archivo.getSize()
+                        );
+                        
+                        horaAusencia.addArchivo(archivoEntity);
+                        archivoRepository.save(archivoEntity);
+                        
+                        // Crear DTO para respuesta
+                        ArchivoDTO archivoDto = new ArchivoDTO();
+                        archivoDto.setId(archivoEntity.getId());
+                        archivoDto.setNombreArchivo(archivoEntity.getNombreArchivo());
+                        archivoDto.setTamanio(archivoEntity.getTamanio());
+                        archivoDto.setTamanioFormateado(ArchivoDTO.formatFileSize(archivoEntity.getTamanio()));
+                        archivoDto.setTipoMime(archivoEntity.getTipoMime());
+                        archivoDto.setFechaSubida(archivoEntity.getFechaSubida());
+                        archivoDto.setUrlDescarga("/api/ausencias/archivos/" + archivoEntity.getId() + "/download");
+                        
+                        archivosDto.add(archivoDto);
+                    }
+                }
+            }
+            
+            // Crear DTO de respuesta para esta hora
+            HoraAusenciaConCoberturaDTO horaConCoberturaDto = new HoraAusenciaConCoberturaDTO();
+            horaConCoberturaDto.setId(horaAusencia.getId());
+            horaConCoberturaDto.setHora(horaAusencia.getHora());
+            horaConCoberturaDto.setGrupo(horaAusencia.getGrupo());
+            horaConCoberturaDto.setAula(horaAusencia.getAula());
+            horaConCoberturaDto.setTarea(horaAusencia.getTarea());
+            horaConCoberturaDto.setCobertura(null);
+            horaConCoberturaDto.setArchivos(archivosDto);
+            
+            horasConCobertura.add(horaConCoberturaDto);
+        }
+
+        // Crear DTO de respuesta
+        AusenciaResponseDTO responseDto = new AusenciaResponseDTO();
+        responseDto.setId(ausencia.getId());
+        responseDto.setProfesorAusenteEmail(ausencia.getProfesorAusenteEmail());
+        responseDto.setFecha(ausencia.getFecha());
+        responseDto.setHoras(horasConCobertura);
+
+        logger.info("Ausencia creada exitosamente con {} horas y archivos", horasConCobertura.size());
+        return responseDto;
+    }
+
+    /**
+     * Obtiene todas las ausencias de una fecha específica, agrupadas por hora
+     * 
+     * @param fecha Fecha de las ausencias a buscar
+     * @return Map con las ausencias agrupadas por hora (key=hora, value=lista de ausencias)
+     */
+    public Map<String, List<AusenciaResponseDTO>> obtenerAusenciasPorFecha(LocalDate fecha) {
+        logger.debug("Obteniendo ausencias para fecha: {}", fecha);
+        
+        List<Ausencia> ausencias = ausenciaRepository.findByFecha(fecha);
+        Map<String, List<AusenciaResponseDTO>> ausenciasPorHora = new HashMap<>();
+        
+        for (Ausencia ausencia : ausencias) {
+            // Convertir cada Ausencia a AusenciaResponseDTO
+            for (HoraAusencia horaAusencia : ausencia.getHoras()) {
+                String horaKey = String.valueOf(horaAusencia.getHora());
+                
+                // Crear DTO para esta hora específica
+                AusenciaResponseDTO ausenciaDto = new AusenciaResponseDTO();
+                ausenciaDto.setId(ausencia.getId());
+                ausenciaDto.setProfesorAusenteEmail(ausencia.getProfesorAusenteEmail());
+                ausenciaDto.setFecha(ausencia.getFecha());
+                
+                // Crear HoraAusenciaConCoberturaDTO con archivos
+                HoraAusenciaConCoberturaDTO horaDto = new HoraAusenciaConCoberturaDTO();
+                horaDto.setId(horaAusencia.getId());
+                horaDto.setHora(horaAusencia.getHora());
+                horaDto.setGrupo(horaAusencia.getGrupo());
+                horaDto.setAula(horaAusencia.getAula());
+                horaDto.setTarea(horaAusencia.getTarea());
+                
+                // Obtener cobertura si existe
+                Optional<Cobertura> coberturaOpt = coberturaRepository.findByHoraAusenciaId(horaAusencia.getId());
+                if (coberturaOpt.isPresent()) {
+                    Cobertura cobertura = coberturaOpt.get();
+                    CoberturaDTO coberturaDto = new CoberturaDTO();
+                    coberturaDto.setProfesorCubreEmail(cobertura.getProfesorCubreEmail());
+                    coberturaDto.setProfesorAusenteEmail(ausencia.getProfesorAusenteEmail());
+                    coberturaDto.setGrupo(horaAusencia.getGrupo());
+                    coberturaDto.setAula(horaAusencia.getAula());
+                    coberturaDto.setHora(horaAusencia.getHora());
+                    coberturaDto.setFecha(ausencia.getFecha());
+                    coberturaDto.setTarea(horaAusencia.getTarea());
+                    horaDto.setCobertura(coberturaDto);
+                }
+                
+                // Obtener archivos asociados
+                List<ArchivoDTO> archivosDto = new ArrayList<>();
+                for (ArchivoHoraAusencia archivo : horaAusencia.getArchivos()) {
+                    ArchivoDTO archivoDto = new ArchivoDTO();
+                    archivoDto.setId(archivo.getId());
+                    archivoDto.setNombreArchivo(archivo.getNombreArchivo());
+                    archivoDto.setTamanio(archivo.getTamanio());
+                    archivoDto.setTamanioFormateado(ArchivoDTO.formatFileSize(archivo.getTamanio()));
+                    archivoDto.setTipoMime(archivo.getTipoMime());
+                    archivoDto.setFechaSubida(archivo.getFechaSubida());
+                    archivoDto.setUrlDescarga("/api/ausencias/archivos/" + archivo.getId() + "/download");
+                    archivosDto.add(archivoDto);
+                }
+                horaDto.setArchivos(archivosDto);
+                
+                ausenciaDto.setHoras(Collections.singletonList(horaDto));
+                
+                // Agregar al mapa agrupado por hora
+                ausenciasPorHora.computeIfAbsent(horaKey, k -> new ArrayList<>()).add(ausenciaDto);
+            }
+        }
+        
+        logger.info("Encontradas {} ausencias en {} horas diferentes para fecha {}", 
+                    ausencias.size(), ausenciasPorHora.size(), fecha);
+        return ausenciasPorHora;
     }
 
     /**
