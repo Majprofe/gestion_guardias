@@ -23,4 +23,10 @@ public interface HoraAusenciaRepository extends JpaRepository<HoraAusencia, Long
      */
     @Query("SELECT ha FROM HoraAusencia ha JOIN ha.ausencia a WHERE a.fecha = :fecha ORDER BY ha.hora ASC")
     List<HoraAusencia> findByFecha(@Param("fecha") LocalDate fecha);
+
+    /**
+     * Busca horas de ausencia por fecha y número de hora
+     */
+    @Query("SELECT ha FROM HoraAusencia ha JOIN ha.ausencia a WHERE a.fecha = :fecha AND ha.hora = :numeroHora")
+    List<HoraAusencia> findByAusencia_FechaAndNumeroHora(@Param("fecha") LocalDate fecha, @Param("numeroHora") Integer numeroHora);
 }

@@ -42,6 +42,9 @@ public class AusenciaService {
     @Autowired
     private es.iesjandula.guardias.repositories.ArchivoHoraAusenciaRepository archivoRepository;
 
+    @Autowired
+    private CoberturaAsignacionService coberturaAsignacionService;
+
     // Métodos del modelo viejo comentados temporalmente - serán migrados después
     // public AusenciaConGuardiasDTO guardarYAsignarCobertura(CrearAusenciaDTO crearDto) {...}
     // public List<AusenciaConGuardiasDTO> guardarYAsignarCoberturaMultiple(CrearAusenciaMultipleDTO crearDto) {...}
@@ -116,6 +119,33 @@ public class AusenciaService {
         // Guardar la ausencia con todas sus horas (cascade ALL)
         ausencia = ausenciaRepository.save(ausencia);
         logger.info("Ausencia creada con ID: {} y {} horas", ausencia.getId(), ausencia.getHoras().size());
+
+        // ASIGNAR COBERTURAS AUTOMÁTICAMENTE
+        // Primero, verificar si alguna de las horas ya tiene coberturas asignadas
+        List<Integer> horasConCoberturaExistente = new ArrayList<>();
+        for (HoraAusencia horaAusencia : ausencia.getHoras()) {
+            List<Cobertura> coberturasExistentes = coberturaRepository.findByHoraAusencia_Ausencia_FechaAndHoraAusencia_NumeroHora(
+                crearDto.getFecha(), horaAusencia.getHora()
+            );
+            if (!coberturasExistentes.isEmpty()) {
+                horasConCoberturaExistente.add(horaAusencia.getHora());
+            }
+        }
+        
+        try {
+            if (!horasConCoberturaExistente.isEmpty()) {
+                // Si hay horas con coberturas existentes, reasignar TODAS las coberturas de esas horas
+                logger.info("Detectadas coberturas existentes en horas {}. Reasignando para distribución equitativa", 
+                    horasConCoberturaExistente);
+                coberturaAsignacionService.reasignarCoberturasDelDia(crearDto.getFecha(), horasConCoberturaExistente);
+            } else {
+                // Si no hay coberturas previas, asignar normalmente
+                coberturaAsignacionService.asignarCoberturas(ausencia, crearDto.getFecha());
+                logger.info("Coberturas asignadas automáticamente para ausencia ID: {}", ausencia.getId());
+            }
+        } catch (Exception e) {
+            logger.error("Error asignando coberturas para ausencia {}: {}", ausencia.getId(), e.getMessage(), e);
+        }
 
         // Actualizar los IDs en los DTOs
         for (int i = 0; i < ausencia.getHoras().size(); i++) {
@@ -193,6 +223,33 @@ public class AusenciaService {
         
         // Guardar la ausencia con todas sus horas
         ausencia = ausenciaRepository.save(ausencia);
+        
+        // ASIGNAR COBERTURAS AUTOMÁTICAMENTE
+        // Primero, verificar si alguna de las horas ya tiene coberturas asignadas
+        List<Integer> horasConCoberturaExistente = new ArrayList<>();
+        for (HoraAusencia horaAusencia : ausencia.getHoras()) {
+            List<Cobertura> coberturasExistentes = coberturaRepository.findByHoraAusencia_Ausencia_FechaAndHoraAusencia_NumeroHora(
+                crearDto.getFecha(), horaAusencia.getHora()
+            );
+            if (!coberturasExistentes.isEmpty()) {
+                horasConCoberturaExistente.add(horaAusencia.getHora());
+            }
+        }
+        
+        try {
+            if (!horasConCoberturaExistente.isEmpty()) {
+                // Si hay horas con coberturas existentes, reasignar TODAS las coberturas de esas horas
+                logger.info("Detectadas coberturas existentes en horas {}. Reasignando para distribución equitativa", 
+                    horasConCoberturaExistente);
+                coberturaAsignacionService.reasignarCoberturasDelDia(crearDto.getFecha(), horasConCoberturaExistente);
+            } else {
+                // Si no hay coberturas previas, asignar normalmente
+                coberturaAsignacionService.asignarCoberturas(ausencia, crearDto.getFecha());
+                logger.info("Coberturas asignadas automáticamente para ausencia ID: {}", ausencia.getId());
+            }
+        } catch (Exception e) {
+            logger.error("Error asignando coberturas para ausencia {}: {}", ausencia.getId(), e.getMessage(), e);
+        }
         
         // Ahora procesar archivos para cada hora
         for (int i = 0; i < ausencia.getHoras().size(); i++) {

@@ -191,6 +191,22 @@ public class HorariosProxyController {
     }
 
     /**
+     * Obtener grupo por abreviatura
+     * GET /api/horarios/grupos/abreviatura/{abreviatura}
+     */
+    @GetMapping("/grupos/abreviatura/{abreviatura}")
+    public ResponseEntity<?> getGrupoPorAbreviatura(@PathVariable String abreviatura) {
+        try {
+            String url = horariosApiUrl + "/grupos/abreviatura/" + abreviatura;
+            ResponseEntity<Object> response = restTemplate.getForEntity(url, Object.class);
+            return ResponseEntity.ok(response.getBody());
+        } catch (RestClientException e) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(Map.of("error", "Error conectando con servicio de horarios", "details", e.getMessage()));
+        }
+    }
+
+    /**
      * Endpoint de test simple para verificar que el proxy funciona
      * GET /api/horarios/test
      */

@@ -58,4 +58,13 @@ public interface CoberturaRepository extends JpaRepository<Cobertura, Long> {
     @Query("SELECT c FROM Cobertura c JOIN c.horaAusencia ha JOIN ha.ausencia a WHERE a.fecha = :fecha")
     List<Cobertura> findByFecha(@Param("fecha") LocalDate fecha);
 
+    /**
+     * Busca coberturas por fecha y hora específicas
+     */
+    @Query("SELECT c FROM Cobertura c JOIN c.horaAusencia ha JOIN ha.ausencia a " +
+           "WHERE a.fecha = :fecha AND ha.hora = :hora")
+    List<Cobertura> findByHoraAusencia_Ausencia_FechaAndHoraAusencia_NumeroHora(
+            @Param("fecha") LocalDate fecha, 
+            @Param("hora") Integer hora);
+
 }

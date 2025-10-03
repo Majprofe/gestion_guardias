@@ -29,4 +29,9 @@ public class GrupoService {
         repository.deleteAll();
     }
 
+    public Grupo findByAbreviatura(String abreviatura) {
+        return repository.findByAbreviatura(abreviatura)
+                .orElseThrow(() -> new RuntimeException("Grupo no encontrado: " + abreviatura));
+    }
+
 }

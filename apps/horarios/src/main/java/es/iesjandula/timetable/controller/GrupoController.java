@@ -30,4 +30,11 @@ public class GrupoController {
     public Grupo getById(@PathVariable Long id) {
         return service.findById(id);
     }
+
+    @GetMapping("/abreviatura/{abreviatura}")
+    @Operation(summary = "Obtener un grupo por abreviatura", 
+               description = "Retorna la información de un grupo incluyendo si es problemático")
+    public Grupo getByAbreviatura(@PathVariable String abreviatura) {
+        return service.findByAbreviatura(abreviatura);
+    }
 }
