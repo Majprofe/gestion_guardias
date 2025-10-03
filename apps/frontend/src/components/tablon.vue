@@ -14,7 +14,6 @@
                             <th>Tarea</th>
                             <th>Profesor que Cubre</th>
                             <th>Material</th>
-                            <th class="acciones-columna" v-if="mostrarAcciones(faltasHora)">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -37,16 +36,11 @@
                                        :href="'http://localhost:8081' + archivo.urlDescarga"
                                        download
                                        class="archivo-link"
-                                       :title="'Descargar ' + archivo.nombreArchivo">
-                                        📄 {{ archivo.nombreArchivo }}
+                                       :title="archivo.nombreArchivo">
+                                        📄 {{ acortarNombreArchivo(archivo.nombreArchivo) }}
                                     </a>
                                 </div>
                                 <span v-else class="sin-material">Sin material</span>
-                            </td>
-                            <td v-if="falta.profesorEmail === usuarioEmail && !esFechaActual" class="acciones-celda">
-                                <button @click="eliminarAusencia(falta.id, hora, index)" class="btn-eliminar-falta">
-                                    🗑️ Eliminar falta
-                                </button>
                             </td>
                         </tr>
                     </tbody>
@@ -79,6 +73,19 @@ const emailAcortado = (email) => {
     return indiceArroba === -1 ? email.slice(0, 10) + '...' : email.slice(0, indiceArroba);
 };
 
+const acortarNombreArchivo = (nombreArchivo) => {
+    if (!nombreArchivo) return "";
+    // Si el nombre es muy largo, lo acortamos manteniendo la extensión
+    const maxLength = 25;
+    if (nombreArchivo.length <= maxLength) return nombreArchivo;
+    
+    const extension = nombreArchivo.substring(nombreArchivo.lastIndexOf('.'));
+    const nombreSinExt = nombreArchivo.substring(0, nombreArchivo.lastIndexOf('.'));
+    const nombreCorto = nombreSinExt.substring(0, maxLength - extension.length - 3) + '...';
+    
+    return nombreCorto + extension;
+};
+
 const nombreHora = (hora) => {
     const horas = {
         "1": "Primera",
@@ -91,10 +98,6 @@ const nombreHora = (hora) => {
         "8": "Octava"
     };
     return horas[hora] || `Hora ${hora}`;
-};
-
-const mostrarAcciones = (faltas) => {
-    return faltas.some(falta => falta.profesorEmail === usuarioEmail.value);
 };
 
 onMounted(() => {
@@ -251,38 +254,6 @@ button:hover {
     font-weight: 600;
 }
 
-.acciones-columna {
-    width: 40px;
-    text-align: center;
-}
-
-.acciones-celda {
-    text-align: center;
-}
-
-.btn-eliminar-falta {
-    background-color: #dc3545;
-    color: white;
-    border: none;
-    padding: 6px 12px;
-    font-size: 13px;
-    border-radius: 20px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.3s ease, transform 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    white-space: nowrap;
-    width: auto;
-}
-
-.btn-eliminar-falta:hover {
-    background-color: #c82333;
-    transform: scale(1.03);
-}
-
 .no-cubrir {
     color: red;
     font-weight: bold;
@@ -303,26 +274,28 @@ button:hover {
 }
 
 .material-celda {
-    min-width: 150px;
+    min-width: 120px;
+    max-width: 250px;
 }
 
 .material-archivos {
     display: flex;
     flex-direction: column;
     gap: 6px;
+    align-items: flex-start;
 }
 
 .archivo-link {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
+    gap: 4px;
+    padding: 4px 8px;
     background-color: #f8f9fa;
     border: 1px solid #dee2e6;
     border-radius: 4px;
     color: #1F86A1;
     text-decoration: none;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
     transition: all 0.2s ease;
     overflow: hidden;
@@ -392,15 +365,6 @@ p {
         color: #1F86A1;
         display: block;
         margin-bottom: 4px;
-    }
-
-    .acciones-columna,
-    .acciones-celda {
-        text-align: left;
-    }
-
-    .btn-eliminar-pequeno {
-        margin-top: 8px;
     }
 
     .tarea-celda,
