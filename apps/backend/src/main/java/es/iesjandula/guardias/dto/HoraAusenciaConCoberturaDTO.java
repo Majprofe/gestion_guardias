@@ -17,7 +17,7 @@ public class HoraAusenciaConCoberturaDTO {
     @Schema(description = "ID de la hora de ausencia", example = "1")
     private Long id;
 
-    @Schema(description = "Número de hora (1-8)", example = "3")
+    @Schema(description = "Número de hora (1-6, sin recreo)", example = "3")
     private Integer hora;
 
     @Schema(description = "Grupo afectado", example = "1DAW")

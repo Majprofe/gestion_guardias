@@ -1,7 +1,8 @@
 <template>
     <div class="tablon-faltas-container">
         <label for="fecha">Selecciona una fecha:</label>
-        <input type="date" v-model="fecha" :min="fechaHoy" required />
+        <input type="date" v-model="fecha" :min="fechaHoy" @change="validarFecha" required />
+        <p v-if="errorFechaFinDeSemana" class="error-fecha">⚠️ No se pueden seleccionar sábados ni domingos.</p>
 
         <div v-if="Object.keys(faltasPorHora).length">
             <div v-for="(faltasHora, hora) in faltasPorHora" :key="hora" class="hora-section">
@@ -12,7 +13,7 @@
                     <span class="convivencia-icon">🏫</span>
                     <span class="convivencia-texto">
                         <strong>Aula de Convivencia:</strong> 
-                        {{ emailAcortado(aulaConvivencia[hora]) }}
+                        {{ aulaConvivencia[hora].nombre || aulaConvivencia[hora].email }}
                     </span>
                 </div>
 
@@ -28,14 +29,14 @@
                     </thead>
                     <tbody>
                         <tr v-for="(falta, index) in faltasHora" :key="index">
-                            <td :data-label="'Profesor Ausente'">{{ emailAcortado(falta.profesorEmail) }}</td>
+                            <td :data-label="'Profesor Ausente'">{{ falta.profesorNombre || falta.profesorEmail }}</td>
                             <td :data-label="'Aula - Grupo'">{{ falta.aula }} - {{ falta.grupo }}</td>
                             <td :data-label="'Tarea'" class="tarea-celda">
                                 <span class="tarea-texto">{{ falta.tarea || 'Sin especificar' }}</span>
                             </td>
                             <td :data-label="'Profesor que Cubre'">
                                 <span v-if="falta.cobertura">
-                                    {{ emailAcortado(falta.profesorCubreEmail) }}
+                                    {{ falta.profesorCubreNombre || falta.profesorCubreEmail }}
                                 </span>
                                 <span v-else class="no-cubrir">No cubierta</span>
                             </td>
@@ -72,8 +73,9 @@ const toast = useToast();
 
 const fecha = ref("");
 const faltasPorHora = ref({});
-const aulaConvivencia = ref({}); // Profesores de convivencia por hora
+const aulaConvivencia = ref({}); // Profesores de convivencia por hora {hora: {email: string, nombre: string}}
 const usuarioEmail = ref(null);
+const errorFechaFinDeSemana = ref(false);
 
 const fechaHoy = new Date().toISOString().split("T")[0];
 const esFechaActual = computed(() => fecha.value === fechaHoy);
@@ -115,9 +117,34 @@ onMounted(() => {
     usuarioEmail.value = localStorage.getItem("userEmail");
 });
 
+const validarFecha = () => {
+    if (!fecha.value) {
+        errorFechaFinDeSemana.value = false;
+        return;
+    }
+    
+    // Corregir problema de zona horaria añadiendo 'T00:00:00' para forzar hora local
+    const fechaLocal = new Date(fecha.value + 'T00:00:00');
+    const dia = fechaLocal.getDay();
+    
+    // Validar que no sea sábado (6) ni domingo (0)
+    if (dia === 0 || dia === 6) {
+        errorFechaFinDeSemana.value = true;
+        faltasPorHora.value = {};
+        aulaConvivencia.value = {};
+        toast.warning("No se pueden consultar ausencias en fin de semana.");
+        return;
+    }
+    
+    errorFechaFinDeSemana.value = false;
+};
+
 watch(fecha, (nuevaFecha) => {
     if (nuevaFecha) {
-        cargarFaltas();
+        validarFecha();
+        if (!errorFechaFinDeSemana.value) {
+            cargarFaltas();
+        }
     }
 });
 
@@ -132,7 +159,6 @@ const cargarFaltas = async () => {
 
         const ausenciasPorHora = response.data;
         const agrupadas = {};
-        const convivenciaPorHora = {};
 
         // El backend ya nos devuelve las ausencias agrupadas por hora
         for (const [hora, listaAusencias] of Object.entries(ausenciasPorHora)) {
@@ -142,19 +168,23 @@ const cargarFaltas = async () => {
                 // Cada ausencia tiene un array de horas, tomamos la primera (solo hay una por la agrupación del backend)
                 const horaData = ausencia.horas[0];
                 
-                // Si es aula de convivencia, guardarla por separado
-                if (horaData.cobertura && horaData.grupo === "CONVIVENCIA") {
-                    convivenciaPorHora[hora] = horaData.cobertura.profesorCubreEmail?.toLowerCase();
-                    continue; // No mostrar en la tabla principal
-                }
+                // NOTA: Ya NO se persiste convivencia en BD, se calcula dinámicamente
+                // Los nombres vienen directamente del backend, no hace falta llamarlos por separado
+                
+                const emailAusente = ausencia.profesorAusenteEmail?.toLowerCase() || "desconocido@dominio.com";
+                const emailCubre = horaData.cobertura?.profesorCubreEmail?.toLowerCase() || null;
                 
                 agrupadas[hora].push({
                     id: ausencia.id,
-                    profesorEmail: ausencia.profesorAusenteEmail?.toLowerCase() || "desconocido@dominio.com",
+                    profesorEmail: emailAusente,
+                    // Usar el nombre que viene del backend
+                    profesorNombre: ausencia.profesorAusenteNombre || emailAusente,
                     aula: horaData.aula,
                     grupo: horaData.grupo,
                     tarea: horaData.tarea,
-                    profesorCubreEmail: horaData.cobertura?.profesorCubreEmail?.toLowerCase() || null,
+                    profesorCubreEmail: emailCubre,
+                    // Usar el nombre que viene del backend
+                    profesorCubreNombre: horaData.cobertura?.profesorCubreNombre || emailCubre,
                     cobertura: horaData.cobertura !== null,
                     archivos: horaData.archivos || [],
                     hora
@@ -163,9 +193,10 @@ const cargarFaltas = async () => {
         }
 
         faltasPorHora.value = agrupadas;
-        aulaConvivencia.value = convivenciaPorHora;
+        // Ya no usamos convivenciaPorHora de las ausencias
         
-        // Calcular convivencia para horas sin ausencias (horas 1-8)
+        // Calcular convivencia dinámicamente para TODAS las horas (1-8)
+        // Esto funciona igual con o sin ausencias
         await calcularConvivenciaParaHorasVacias();
         
     } catch (error) {
@@ -175,19 +206,17 @@ const cargarFaltas = async () => {
 };
 
 /**
- * Calcula dinámicamente el profesor de convivencia para horas 1-8 que no tienen ausencias.
- * Llama al backend para obtener el profesor con menor contador de convivencia.
+ * Calcula dinámicamente el profesor de convivencia para TODAS las horas lectivas (1-6).
+ * NOTA: Las horas son: 1, 2, 3 (RECREO 11:15-11:45), 4, 5, 6. Termina a las 14:45.
+ * Llama al backend para obtener el profesor con menor contador de convivencia,
+ * excluyendo automáticamente a profesores que ya están cubriendo otras guardias.
  */
 const calcularConvivenciaParaHorasVacias = async () => {
-    const horasLectivas = [1, 2, 3, 4, 5, 6, 7, 8];
+    const horasLectivas = [1, 2, 3, 4, 5, 6];
     
     for (const hora of horasLectivas) {
-        // Si ya existe convivencia asignada desde BD, no calcular
-        if (aulaConvivencia.value[hora]) {
-            continue;
-        }
-        
-        // Si no hay ausencias en esta hora, calcular convivencia dinámicamente
+        // Calcular convivencia dinámicamente para TODAS las horas (con o sin ausencias)
+        // NOTA: Frontend solo se comunica con backend guardias (8081), NO con horarios (8082)
         try {
             const response = await axios.get(`http://localhost:8081/api/coberturas/convivencia-calculada`, {
                 params: {
@@ -197,14 +226,18 @@ const calcularConvivenciaParaHorasVacias = async () => {
             });
             
             if (response.data.success) {
-                aulaConvivencia.value[hora] = response.data.profesorEmail?.toLowerCase();
+                aulaConvivencia.value[hora] = {
+                    email: response.data.profesorEmail?.toLowerCase(),
+                    nombre: response.data.profesorNombre || response.data.profesorEmail
+                };
+                console.log(`✅ Convivencia hora ${hora}: ${response.data.profesorNombre || response.data.profesorEmail}`);
             }
         } catch (error) {
             // Si es fin de semana o no hay profesores de guardia, ignorar silenciosamente
             if (error.response?.status === 400 || error.response?.status === 404) {
-                console.log(`No se puede calcular convivencia para hora ${hora}: ${error.response?.data?.error}`);
+                console.debug(`No se puede calcular convivencia para hora ${hora}: ${error.response?.data?.error}`);
             } else {
-                console.error(`Error calculando convivencia para hora ${hora}:`, error);
+                console.error(`❌ Error calculando convivencia para hora ${hora}:`, error);
             }
         }
     }
@@ -260,6 +293,18 @@ input[type="date"] {
 input[type="date"]:focus {
     border-color: #1F86A1;
     outline: none;
+}
+
+.error-fecha {
+    color: #dc3545;
+    font-size: 14px;
+    font-weight: 500;
+    margin-top: 8px;
+    padding: 8px 12px;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 6px;
+    text-align: left;
 }
 
 button {

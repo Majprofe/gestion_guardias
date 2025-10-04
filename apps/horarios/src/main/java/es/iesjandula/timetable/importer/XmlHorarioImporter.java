@@ -146,30 +146,56 @@ public class XmlHorarioImporter {
         }
 
         // TRAMOS HORARIOS (renumerados sin recreo)
-        Map<Integer, TramoHorario> tramos = new HashMap<>();
+        // Solo cargamos horas lectivas (6 por día), excluyendo el recreo
+        Map<Long, TramoHorario> tramosMap = new HashMap<>(); // Mapeo ID_XML -> TramoHorario guardado
         NodeList tramoList = doc.getElementsByTagName("TRAMO");
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("H:mm");
         Map<Integer, Integer> contadorHoraPorDia = new HashMap<>();
+        
+        long nuevoId = 1; // ID secuencial para los tramos (1-30)
 
         for (int i = 0; i < tramoList.getLength(); i++) {
             Element el = (Element) tramoList.item(i);
-            Long id = parseLongSafe(el.getAttribute("num_tr"));
+            Long idOriginalXml = parseLongSafe(el.getAttribute("num_tr"));
             Integer dia = parseIntSafe(el.getAttribute("numero_dia"));
 
-            if (id == null || dia == null) continue;
+            if (idOriginalXml == null || dia == null) continue;
 
             LocalTime ini = LocalTime.parse(el.getAttribute("hora_inicio").trim(), formatter);
             LocalTime fin = LocalTime.parse(el.getAttribute("hora_final").trim(), formatter);
 
-            if (ini.equals(LocalTime.of(11, 0)) && fin.equals(LocalTime.of(11, 30))) continue;
+            // EXCLUIR RECREO: Detectar tramos de recreo (30 minutos entre las 11:00 y 11:45)
+            // Casos comunes:
+            //   - 11:00-11:30 (algunos institutos)
+            //   - 11:15-11:45 (nuestro instituto actual)
+            // Criterio: tramo de 30 minutos que empiece entre 11:00 y 11:15
+            boolean esRecreo = (ini.getHour() == 11 && ini.getMinute() >= 0 && ini.getMinute() <= 15) &&
+                               (fin.getHour() == 11 && fin.getMinute() >= 30 && fin.getMinute() <= 45) &&
+                               (java.time.Duration.between(ini, fin).toMinutes() == 30);
+            
+            if (esRecreo) {
+                log.info("⏭️  Omitiendo recreo: Día {} - Tramo XML {} ({} - {})", dia, idOriginalXml, ini, fin);
+                continue;
+            }
 
+            // Renumerar hora del día (1-6 en lugar de 1-7)
             int nuevaHoraDia = contadorHoraPorDia.getOrDefault(dia, 0) + 1;
             contadorHoraPorDia.put(dia, nuevaHoraDia);
 
-            TramoHorario tramo = new TramoHorario(id, dia, nuevaHoraDia, ini, fin);
+            // IMPORTANTE: Usar nuevoId secuencial (1-30) en lugar del ID original del XML
+            TramoHorario tramo = new TramoHorario(nuevoId, dia, nuevaHoraDia, ini, fin);
             tramoHorarioService.save(tramo);
-            tramos.put(id.intValue(), tramo);
+            
+            // Guardar mapeo: ID_XML -> TramoHorario (para usar al cargar actividades)
+            tramosMap.put(idOriginalXml, tramo);
+            
+            log.debug("✅ Tramo guardado: ID {} (XML:{}) - Día {} Hora {} ({} - {})", 
+                     nuevoId, idOriginalXml, dia, nuevaHoraDia, ini, fin);
+            
+            nuevoId++; // Incrementar ID secuencial
         }
+        
+        log.info("📊 Total tramos horarios cargados: {} (debe ser 30 = 6 horas x 5 días)", tramosMap.size());
 
         // HORARIO PROFESORES
         NodeList horariosProfesores = doc.getElementsByTagName("HORARIO_PROF");
@@ -191,7 +217,15 @@ public class XmlHorarioImporter {
 
                 if (tramoId == null || asignaturaId == null || aulaId == null) continue;
 
-                TramoHorario tramo = tramoHorarioService.findById(tramoId);
+                // Buscar el tramo usando el mapeo ID_XML -> TramoHorario
+                // Si el tramo fue excluido (recreo), no estará en el mapa
+                TramoHorario tramo = tramosMap.get(tramoId);
+                if (tramo == null) {
+                    // Tramo no existe (fue excluido como recreo)
+                    log.debug("⏭️  Omitiendo actividad para tramo XML {} (recreo excluido)", tramoId);
+                    continue;
+                }
+                
                 Asignatura asignatura = asignaturaService.findById(asignaturaId);
                 Aula aula = aulaService.findById(aulaId);
 

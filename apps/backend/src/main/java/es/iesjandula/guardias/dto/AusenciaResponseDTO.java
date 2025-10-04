@@ -23,6 +23,9 @@ public class AusenciaResponseDTO {
     @Schema(description = "Email del profesor ausente", example = "profesor@instituto.edu")
     private String profesorAusenteEmail;
 
+    @Schema(description = "Nombre completo del profesor ausente", example = "Juan Pérez García")
+    private String profesorAusenteNombre;
+
     @Schema(description = "Fecha de la ausencia", example = "2025-10-09")
     private LocalDate fecha;
 

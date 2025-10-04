@@ -15,8 +15,10 @@ import es.iesjandula.guardias.repositories.AusenciaRepository;
 import es.iesjandula.guardias.repositories.CoberturaRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +46,12 @@ public class AusenciaService {
 
     @Autowired
     private CoberturaAsignacionService coberturaAsignacionService;
+
+    @Autowired
+    private RestTemplate restTemplate;
+
+    @Value("${app.horarios.api.url:http://localhost:8082}")
+    private String horariosApiUrl;
 
     // Métodos del modelo viejo comentados temporalmente - serán migrados después
     // public AusenciaConGuardiasDTO guardarYAsignarCobertura(CrearAusenciaDTO crearDto) {...}
@@ -339,6 +347,8 @@ public class AusenciaService {
                 AusenciaResponseDTO ausenciaDto = new AusenciaResponseDTO();
                 ausenciaDto.setId(ausencia.getId());
                 ausenciaDto.setProfesorAusenteEmail(ausencia.getProfesorAusenteEmail());
+                // Obtener nombre del profesor ausente desde backend de horarios
+                ausenciaDto.setProfesorAusenteNombre(obtenerNombreProfesor(ausencia.getProfesorAusenteEmail()));
                 ausenciaDto.setFecha(ausencia.getFecha());
                 
                 // Crear HoraAusenciaConCoberturaDTO con archivos
@@ -355,6 +365,8 @@ public class AusenciaService {
                     Cobertura cobertura = coberturaOpt.get();
                     CoberturaDTO coberturaDto = new CoberturaDTO();
                     coberturaDto.setProfesorCubreEmail(cobertura.getProfesorCubreEmail());
+                    // Obtener nombre del profesor que cubre desde backend de horarios
+                    coberturaDto.setProfesorCubreNombre(obtenerNombreProfesor(cobertura.getProfesorCubreEmail()));
                     coberturaDto.setProfesorAusenteEmail(ausencia.getProfesorAusenteEmail());
                     coberturaDto.setGrupo(horaAusencia.getGrupo());
                     coberturaDto.setAula(horaAusencia.getAula());
@@ -396,6 +408,32 @@ public class AusenciaService {
      */
     public long contarTotalAusencias() {
         return ausenciaRepository.count();
+    }
+
+    /**
+     * Obtiene el nombre completo de un profesor desde el backend de horarios
+     * 
+     * @param email Email del profesor
+     * @return Nombre completo del profesor o null si no se encuentra
+     */
+    @SuppressWarnings("unchecked")
+    private String obtenerNombreProfesor(String email) {
+        if (email == null || email.isEmpty()) {
+            return null;
+        }
+        
+        try {
+            String url = horariosApiUrl + "/profesores/email/" + email;
+            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+            
+            if (response != null && response.containsKey("nombre")) {
+                return (String) response.get("nombre");
+            }
+        } catch (Exception e) {
+            logger.warn("No se pudo obtener el nombre del profesor {}: {}", email, e.getMessage());
+        }
+        
+        return null;
     }
 
 }

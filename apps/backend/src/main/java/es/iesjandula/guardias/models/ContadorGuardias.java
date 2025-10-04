@@ -48,7 +48,7 @@ public class ContadorGuardias {
     @Min(value = 1, message = "La hora debe ser mayor a 0")
     @Max(value = 8, message = "La hora debe ser menor o igual a 8")
     @Column(nullable = false)
-    @Schema(description = "Hora del día (1-8)", example = "3")
+    @Schema(description = "Hora del día (1-6, sin recreo)", example = "3")
     private Integer hora;
 
     @Min(value = 0, message = "Las guardias normales no pueden ser negativas")

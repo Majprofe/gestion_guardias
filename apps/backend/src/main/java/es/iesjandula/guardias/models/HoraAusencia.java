@@ -38,7 +38,7 @@ public class HoraAusencia {
     @Min(value = 1, message = "La hora debe ser mayor a 0")
     @Max(value = 8, message = "La hora debe ser menor o igual a 8")
     @Column(nullable = false)
-    @Schema(description = "Hora de la ausencia (1-8)", example = "3")
+    @Schema(description = "Hora de la ausencia (1-6, sin recreo)", example = "3")
     private Integer hora;
 
     @NotBlank(message = "El grupo es obligatorio")

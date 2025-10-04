@@ -35,6 +35,9 @@ public class CoberturaCalculoService {
     @Autowired
     private RestTemplate restTemplate;
 
+    @Autowired
+    private es.iesjandula.guardias.repositories.CoberturaRepository coberturaRepository;
+
     @Value("${horarios.api.url:http://localhost:8082}")
     private String horariosApiUrl;
 
@@ -45,7 +48,7 @@ public class CoberturaCalculoService {
      * Este método NO persiste la asignación en BD, solo calcula y devuelve quién debería estar.
      * 
      * @param fecha Fecha para la cual calcular
-     * @param hora Hora del día (1-8)
+     * @param hora Hora del día (1-6, sin recreo)
      * @return Información del profesor asignado al aula de convivencia
      * @throws RuntimeException Si no hay profesores de guardia disponibles
      */
@@ -69,8 +72,33 @@ public class CoberturaCalculoService {
             profesoresGuardia.size(), 
             profesoresGuardia.stream().map(ProfesorGuardiaSimpleDto::getEmail).toList());
         
-        // Obtener o crear contadores para todos los profesores de guardia
-        List<ContadorGuardias> contadores = profesoresGuardia.stream()
+        // IMPORTANTE: Excluir profesores que ya están cubriendo guardias en esta fecha/hora
+        List<es.iesjandula.guardias.models.Cobertura> coberturasExistentes = 
+            coberturaRepository.findByHoraAusencia_Ausencia_FechaAndHoraAusencia_NumeroHora(fecha, hora);
+        
+        java.util.Set<String> profesoresYaCubriendo = coberturasExistentes.stream()
+            .filter(c -> c.getTipoGuardia() != es.iesjandula.guardias.models.TipoGuardia.CONVIVENCIA)
+            .map(c -> c.getProfesorCubreEmail().toLowerCase())
+            .collect(java.util.stream.Collectors.toSet());
+        
+        logger.debug("Profesores ya cubriendo guardias: {}", profesoresYaCubriendo);
+        
+        // Filtrar profesores disponibles (que NO estén cubriendo guardias)
+        List<ProfesorGuardiaSimpleDto> profesoresDisponibles = profesoresGuardia.stream()
+            .filter(p -> !profesoresYaCubriendo.contains(p.getEmail().toLowerCase()))
+            .collect(java.util.stream.Collectors.toList());
+        
+        if (profesoresDisponibles.isEmpty()) {
+            logger.warn("Todos los profesores de guardia ya están cubriendo ausencias en {} hora {}", fecha, hora);
+            throw new RuntimeException(
+                String.format("Todos los profesores de guardia están ocupados en la fecha %s hora %d", fecha, hora)
+            );
+        }
+        
+        logger.debug("{} profesores disponibles para convivencia (sin guardias asignadas)", profesoresDisponibles.size());
+        
+        // Obtener o crear contadores solo para los profesores disponibles
+        List<ContadorGuardias> contadores = profesoresDisponibles.stream()
             .map(profesor -> {
                 Optional<ContadorGuardias> contadorOpt = contadorGuardiasRepository
                     .findByProfesorEmailAndDiaSemanaAndHora(profesor.getEmail(), diaSemana, hora);
@@ -98,7 +126,7 @@ public class CoberturaCalculoService {
             .orElseThrow(() -> new RuntimeException("Error al seleccionar profesor para convivencia"));
         
         // Buscar el objeto ProfesorGuardiaSimpleDto correspondiente para obtener nombre completo
-        ProfesorGuardiaSimpleDto profesorSeleccionado = profesoresGuardia.stream()
+        ProfesorGuardiaSimpleDto profesorSeleccionado = profesoresDisponibles.stream()
             .filter(p -> p.getEmail().equals(contadorSeleccionado.getProfesorEmail()))
             .findFirst()
             .orElseThrow(() -> new RuntimeException("No se encontró información del profesor seleccionado"));

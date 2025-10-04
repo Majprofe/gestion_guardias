@@ -235,16 +235,16 @@ public class CoberturaController {
             @Parameter(description = "Fecha para calcular (formato: YYYY-MM-DD)", example = "2025-10-03")
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
             
-            @Parameter(description = "Hora del día (1-8)", example = "1")
+            @Parameter(description = "Hora del día (1-6, sin recreo)", example = "1")
             @RequestParam Integer hora
     ) {
         try {
             logger.debug("Calculando convivencia para fecha={} hora={}", fecha, hora);
             
-            // Validar parámetros
-            if (hora < 1 || hora > 8) {
+            // Validar parámetros (6 horas lectivas por día, sin recreo)
+            if (hora < 1 || hora > 6) {
                 return ResponseEntity.badRequest()
-                        .body(Map.of("success", false, "error", "La hora debe estar entre 1 y 8"));
+                        .body(Map.of("success", false, "error", "La hora debe estar entre 1 y 6 (horas lectivas)"));
             }
             
             // Calcular profesor de convivencia

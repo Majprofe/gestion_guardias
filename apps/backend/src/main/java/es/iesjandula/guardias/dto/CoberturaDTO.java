@@ -8,6 +8,7 @@ import java.time.LocalDate;
 public class CoberturaDTO {
     private Long ausenciaId;
     private String profesorCubreEmail;
+    private String profesorCubreNombre;
     private String grupo;
     private String aula;
     private Integer hora;
